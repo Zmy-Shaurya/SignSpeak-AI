@@ -108,13 +108,15 @@ python live_predict.py --camera 0
 - Stand **waist-up in frame, with both shoulders visible**.
 - Wait for "warming up…" to disappear (about 3 seconds), then sign.
 - The big text shows the recognized sign; `...` means nothing or not confident. The small text shows every class's probability.
-- Press **`q`** to quit.
+- Once a sign wins 5 frames in a row it's **accepted** and added to the word line at the bottom. The window then refills (about 3 s) before the next sign, so one movement is never counted twice.
+- Press **`c`** to clear the words and **`q`** to quit.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `--camera` | `0` | Webcam index. Try `1` or `2` if `0` isn't your camera. |
 | `--seconds` | `3.0` | Length of the sliding window. Keep it equal to the recording length. |
 | `--threshold` | `0.7` | Minimum confidence before a sign is shown. |
+| `--hold` | `5` | Frames in a row a sign must win before it's accepted. Raise it if signs fire too easily. |
 
 The prediction looks at the last 3 seconds as a whole, so a sign appears shortly after you finish it and stays for up to 3 seconds.
 
@@ -234,7 +236,7 @@ The `learning/` scripts are standalone exercises. Run step 4 as a module from th
 - [x] Normalization, recording tool, dataset extraction
 - [x] LSTM training with augmentation; live recognition
 - [x] Public dataset integration (ASL Citizen) and an unknown-sign class
-- [ ] Debounce/cooldown so each sign is accepted once
+- [x] Debounce/cooldown so each sign is accepted once
 - [ ] Sentence assembly (a pause ends the sentence)
 - [ ] Text-to-speech (offline, `pyttsx3`)
 - [ ] Web UI (Streamlit / Gradio) with live captions and confidence
