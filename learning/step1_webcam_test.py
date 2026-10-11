@@ -15,7 +15,7 @@ def main():
             print("Failed to read from webcam.")
             break
 
-        frame = cv2.flip(frame, 2)
+        frame = cv2.flip(frame, 1)
         cv2.putText(
             frame,
             "Press q to quit",

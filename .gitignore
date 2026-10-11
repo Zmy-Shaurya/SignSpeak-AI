@@ -1,2 +1,8 @@
 .venv
 todolist.md
+CLAUDE.md
+# raw clips show faces and are large; keypoints are enough to share
+data/videos/
+__pycache__/
+# ASL Citizen license forbids distributing the data or derivatives (keypoints included)
+data/keypoints/*/aslc_*
