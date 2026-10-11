@@ -6,3 +6,7 @@ data/videos/
 __pycache__/
 # ASL Citizen license forbids distributing the data or derivatives (keypoints included)
 data/keypoints/*/aslc_*
+# locally installed agent skills, not part of the project
+.agents/
+.claude/skills/
+skills-lock.json
