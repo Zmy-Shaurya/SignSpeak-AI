@@ -202,6 +202,7 @@ SignSpeak-AI/
 ├── extract_dataset.py    2. clips -> keypoints       -> data/keypoints/<sign>/
 ├── train.py              3. train the LSTM           -> models/sign_model.pt
 ├── live_predict.py       4. live webcam recognition
+├── live_vcam.py          live_predict + output to a virtual webcam (optional: OBS + pyvirtualcam)
 ├── sentence.py          words -> sentence (Gemini or plain) and speech (+ self-check)
 ├── keypoints.py          shared: keypoint layout, normalization, resampling (+ self-check)
 ├── models/
