@@ -1,3 +1,4 @@
 numpy
 mediapipe==0.10.14  # newer releases dropped mp.solutions; brings opencv-contrib-python (cv2)
 torch  # CPU build: pip install torch --index-url https://download.pytorch.org/whl/cpu
+comtypes  # Windows speech (SAPI) for spoken sentences

@@ -11,7 +11,8 @@ import cv2
 
 parser = argparse.ArgumentParser()
 parser.add_argument("sign", help="label, used as the folder name, e.g. hello")
-parser.add_argument("--camera", type=int, default=1)
+parser.add_argument("--camera", type=int, default=0)
+parser.add_argument("--width", type=int, default=1280, help="window width in pixels; drag or maximize to resize")
 parser.add_argument("--seconds", type=float, default=3.0, help="clip length; long enough for your slowest sign")
 args = parser.parse_args()
 
@@ -21,6 +22,8 @@ out_dir.mkdir(parents=True, exist_ok=True)
 cap = cv2.VideoCapture(args.camera)
 if not cap.isOpened():
     raise RuntimeError(f"Could not open camera {args.camera}.")
+cv2.namedWindow("SignSpeak AI - Recorder", cv2.WINDOW_NORMAL)  # resizable; only the window is scaled, not the saved clip
+cv2.resizeWindow("SignSpeak AI - Recorder", args.width, int(args.width * cap.get(cv2.CAP_PROP_FRAME_HEIGHT) / cap.get(cv2.CAP_PROP_FRAME_WIDTH)))
 fps = cap.get(cv2.CAP_PROP_FPS) or 30  # only affects playback speed; extraction resamples anyway
 
 countdown_end = record_end = None

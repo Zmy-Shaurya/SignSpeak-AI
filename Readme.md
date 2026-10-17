@@ -56,18 +56,19 @@ Real-time **American Sign Language (ASL)** recognition from an ordinary webcam. 
 
 | Class | Meaning |
 |---|---|
-| `hello`, `help`, `no`, `please`, `sorry`, `thank_you`, `yes` | ASL signs |
+| `hello`, `help`, `no`, `please`, `sorry`, `thank_you`, `yes` | ASL signs: greetings, politeness, answers |
+| `me`, `you`, `what`, `where`, `want`, `water` | ASL signs: people, questions, needs |
 | `nothing` | no sign / unknown sign (idle movement plus 50 unrelated ASL signs) |
 
-Trained on about 356 clips: the author's own recordings, a second signer, and about 30 clips per sign from the [ASL Citizen](https://www.microsoft.com/en-us/research/project/asl-citizen/) dataset (42 different signers, everyday webcams).
+Trained on about 540 clips: the author's own recordings, a second signer, and about 30 clips per sign from the [ASL Citizen](https://www.microsoft.com/en-us/research/project/asl-citizen/) dataset (42 different signers, everyday webcams).
 
-**Accuracy on held-out test clips: about 85%** (mean over 3 random splits; individual splits range from 75% to 90%). The most common confusions are between visually similar signs (please ↔ sorry, yes ↔ no) and the classes with the fewest clips.
+**Accuracy on held-out test clips: about 77% across 14 classes** (mean over 3 random splits, 74–80%). Strongest: please, hello, want, sorry (89–96%). Weakest: the short pointing signs me (50%) and you (61%), and no (56%), which get confused with nearby chest/face signs.
 
 ## Requirements
 
 - **Python 3.10 or 3.11.** Avoid 3.12+, because `mediapipe==0.10.14` doesn't support it.
 - A **webcam** for recording and the live demo.
-- Windows, macOS or Linux. Developed and tested on Windows 11; no GPU needed.
+- Windows 11 recommended (developed and tested there; spoken output uses the Windows voice). No GPU needed.
 
 ## Installation
 
@@ -109,14 +110,29 @@ python live_predict.py --camera 0
 - Wait for "warming up…" to disappear (about 3 seconds), then sign.
 - The big text shows the recognized sign; `...` means nothing or not confident. The small text shows every class's probability.
 - Once a sign wins 5 frames in a row it's **accepted** and added to the word line at the bottom. The window then refills (about 3 s) before the next sign, so one movement is never counted twice.
+- **Pause for about 2 seconds** to finish a sentence: the words are turned into an English sentence, shown on screen and **spoken aloud**.
 - Press **`c`** to clear the words and **`q`** to quit.
+
+### Natural sentences with Gemini (optional)
+
+By default the sentence is the signs joined in order ("Hello, help, please."). With a free [Google AI Studio](https://aistudio.google.com/) API key, Gemini rewrites them into natural English ("Hello! I need help, please."):
+
+```bash
+setx GEMINI_API_KEY "your-key-here"
+```
+
+Then open a **new** terminal. Alternatively, put `GEMINI_API_KEY=your-key-here` in a `.env` file in the project root (it's gitignored). The key is never stored in the code. Only the recognized words are sent to Gemini, never video. If the key is missing, the internet is down or Gemini takes longer than 3 seconds, the plain sentence is used, so the demo keeps working offline.
+
+Speech uses Windows' built-in voice (SAPI), so the live demo currently needs Windows. Recording, extraction and training work on any OS.
 
 | Option | Default | Meaning |
 |---|---|---|
 | `--camera` | `0` | Webcam index. Try `1` or `2` if `0` isn't your camera. |
 | `--seconds` | `3.0` | Length of the sliding window. Keep it equal to the recording length. |
-| `--threshold` | `0.7` | Minimum confidence before a sign is shown. |
+| `--threshold` | `0.9` | Minimum confidence before a sign is shown. |
 | `--hold` | `5` | Frames in a row a sign must win before it's accepted. Raise it if signs fire too easily. |
+| `--pause` | `2.0` | Seconds of not signing that end a sentence. |
+| `--model` | `gemini-3.5-flash-lite` | Gemini model used to phrase sentences. |
 
 The prediction looks at the last 3 seconds as a whole, so a sign appears shortly after you finish it and stays for up to 3 seconds.
 
@@ -186,6 +202,7 @@ SignSpeak-AI/
 ├── extract_dataset.py    2. clips -> keypoints       -> data/keypoints/<sign>/
 ├── train.py              3. train the LSTM           -> models/sign_model.pt
 ├── live_predict.py       4. live webcam recognition
+├── sentence.py          words -> sentence (Gemini or plain) and speech (+ self-check)
 ├── keypoints.py          shared: keypoint layout, normalization, resampling (+ self-check)
 ├── models/
 │   └── sign_model.pt     trained model (weights + label names)
@@ -209,7 +226,7 @@ The `learning/` scripts are standalone exercises. Run step 4 as a module from th
 | **Save raw keypoints, normalize at load time** | Normalization can change without re-extracting every video. |
 | **Keep raw videos** | Extraction can be redone (for example to add face points) without re-recording. |
 | **PyTorch** instead of TensorFlow | TensorFlow conflicts with MediaPipe's protobuf version. |
-| **Data augmentation and dropout** | Random speed, rotation, scale and shift every epoch. It raised the mean test accuracy from 77% to 85% on the same splits. |
+| **Data augmentation and dropout** | Random speed, rotation, scale and shift every epoch. It raised the mean test accuracy of the earlier 8-class model from 77% to 85% on the same splits. |
 
 ## Troubleshooting
 
@@ -225,7 +242,7 @@ The `learning/` scripts are standalone exercises. Run step 4 as a module from th
 ## Limitations
 
 - **Isolated words only.** It recognizes one sign at a time, not continuous signing or ASL grammar.
-- **Small vocabulary** (7 signs plus `nothing`), with about 30–50 clips each.
+- **Small vocabulary** (13 signs plus `nothing`), with about 30–50 clips each.
 - **No facial expressions.** Signs that differ only by facial grammar can't be distinguished.
 - **Latency:** predictions use a 3-second window, so results trail the sign by up to about 3 seconds.
 - **Test accuracy varies ±10% between random splits** because the test set is small (about 70 clips).
@@ -237,8 +254,8 @@ The `learning/` scripts are standalone exercises. Run step 4 as a module from th
 - [x] LSTM training with augmentation; live recognition
 - [x] Public dataset integration (ASL Citizen) and an unknown-sign class
 - [x] Debounce/cooldown so each sign is accepted once
-- [ ] Sentence assembly (a pause ends the sentence)
-- [ ] Text-to-speech (offline, `pyttsx3`)
+- [x] Sentence assembly (a pause ends the sentence), phrased by Gemini with an offline fallback
+- [x] Text-to-speech (Windows built-in voice, offline)
 - [ ] Web UI (Streamlit / Gradio) with live captions and confidence
 - [ ] Larger vocabulary and more signers
 

@@ -10,3 +10,5 @@ data/keypoints/*/aslc_*
 .agents/
 .claude/skills/
 skills-lock.json
+# local secrets (GEMINI_API_KEY)
+.env
