@@ -1,7 +1,7 @@
 """Record sign clips from the webcam into data/videos/<sign>/.
 
 Usage: python record_videos.py hello [--camera 2] [--seconds 3]
-SPACE starts a 2 s countdown (get your hands ready), then records --seconds automatically. q quits.
+SPACE starts a 1 s countdown (get your hands ready), then records --seconds automatically. q quits.
 """
 import argparse
 import time
@@ -12,7 +12,7 @@ import cv2
 parser = argparse.ArgumentParser()
 parser.add_argument("sign", help="label, used as the folder name, e.g. hello")
 parser.add_argument("--camera", type=int, default=0)
-parser.add_argument("--width", type=int, default=1280, help="window width in pixels; drag or maximize to resize")
+parser.add_argument("--width", type=int, default=720, help="window width in pixels; drag or maximize to resize")
 parser.add_argument("--seconds", type=float, default=3.0, help="clip length; long enough for your slowest sign")
 args = parser.parse_args()
 
@@ -67,7 +67,7 @@ while True:
     if key == ord("q"):
         break
     if key == ord(" ") and not countdown_end and not writer:
-        countdown_end = now + 2
+        countdown_end = now + 1
 
 if writer:  # quit mid-recording: drop the partial clip
     writer.release()

@@ -1,7 +1,9 @@
 """Train the sign classifier on data/keypoints/<sign>/*.npy and save models/sign_model.pt.
 
-Usage: python train.py [--epochs 400]
+Usage: python train.py [--epochs 400] [--cv]
 Labels are the folder names. 20% of each sign is held out as a test set the model never trains on.
+--cv: 5-fold cross-validation instead. Every clip is tested exactly once, which gives a far steadier accuracy
+than a single 20% split. Use it to compare data or training changes. It doesn't save a model.
 """
 import argparse
 from pathlib import Path
@@ -68,9 +70,46 @@ def load_dataset():
     return np.array(X), np.array(y), labels
 
 
+def fit(X, y, n_classes, rng, epochs, report=None):
+    """Train a fresh model on (X, y) with augmentation. report(epoch, loss, model) is called every 10 epochs."""
+    model = SignModel(n_classes)
+    opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
+    loss_fn = nn.CrossEntropyLoss()
+    yt = torch.tensor(y)
+    # ponytail: full-batch training (whole train set per step). Switch to a DataLoader with mini-batches
+    # once the dataset is a few thousand clips.
+    for epoch in range(1, epochs + 1):
+        model.train()
+        opt.zero_grad()
+        loss = loss_fn(model(torch.tensor(augment(X, rng))), yt)
+        loss.backward()
+        opt.step()
+        if report and (epoch % 10 == 0 or epoch == 1):
+            model.eval()
+            report(epoch, loss, model)
+    model.eval()
+    return model
+
+
+def predict(model, X):
+    with torch.no_grad():
+        return model(torch.tensor(X)).argmax(1).numpy()
+
+
+def print_confusion(y_true, y_pred, labels, title):
+    cm = np.zeros((len(labels), len(labels)), int)
+    np.add.at(cm, (y_true, y_pred), 1)
+    width = max(len(l) for l in labels) + 2
+    print(f"\n{title} (rows = true, columns = predicted)")
+    print(" " * width + "".join(f"{l:>{width}}" for l in labels))
+    for l, row in zip(labels, cm):
+        print(f"{l:>{width}}" + "".join(f"{v:>{width}}" for v in row))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=400)
+    parser.add_argument("--cv", action="store_true", help="5-fold cross-validation report; no model saved")
     args = parser.parse_args()
 
     torch.manual_seed(0)
@@ -79,52 +118,43 @@ if __name__ == "__main__":
     X, y, labels = load_dataset()
     print(f"{len(X)} samples, {len(labels)} signs: " + ", ".join(f"{l}={int((y == i).sum())}" for i, l in enumerate(labels)))
 
+    probe = X[:8].copy()
+    probe[..., 195:] = 0
+    assert not augment(probe, rng)[..., 195:].any(), "augment must keep missing hands at zero"
+
+    if args.cv:
+        # Stratified folds: each sign's clips are dealt round-robin into 5 folds.
+        fold = np.empty(len(y), int)
+        for c in range(len(labels)):
+            idx = rng.permutation(np.where(y == c)[0])
+            fold[idx] = np.arange(len(idx)) % 5
+        assert all((fold[y == c] == k).any() for c in range(len(labels)) for k in range(5)), "every sign needs 5+ clips"
+        pred = np.empty_like(y)
+        for k in range(5):
+            model = fit(X[fold != k], y[fold != k], len(labels), rng, args.epochs)
+            pred[fold == k] = predict(model, X[fold == k])
+            print(f"fold {k + 1}/5: {(pred[fold == k] == y[fold == k]).mean():.0%}")
+        accs = [(pred[fold == k] == y[fold == k]).mean() for k in range(5)]
+        print(f"\n5-fold accuracy: {np.mean(accs):.1%} (std {np.std(accs):.1%}), every clip tested once")
+        per = sorted((float((pred[y == c] == c).mean()), labels[c]) for c in range(len(labels)))
+        print("per sign: " + ", ".join(f"{l} {a:.0%}" for a, l in per))
+        print_confusion(y, pred, labels, "Cross-validation confusion matrix, all clips")
+        raise SystemExit
+
     # Stratified split: every sign gets ~20% in test.
     test_idx = np.concatenate([
         rng.permutation(np.where(y == c)[0])[:max(1, round((y == c).sum() * 0.2))] for c in range(len(labels))
     ])
     train_mask = np.ones(len(X), bool)
     train_mask[test_idx] = False
-    Xtr, ytr = torch.tensor(X[train_mask]), torch.tensor(y[train_mask])
-    Xte, yte = torch.tensor(X[~train_mask]), torch.tensor(y[~train_mask])
+    Xte, yte = X[~train_mask], y[~train_mask]
 
-    probe = X[:8].copy()
-    probe[..., 195:] = 0
-    assert not augment(probe, rng)[..., 195:].any(), "augment must keep missing hands at zero"
+    def report(epoch, loss, model):
+        train_acc = (predict(model, X[train_mask]) == y[train_mask]).mean()
+        print(f"epoch {epoch:4d}  train loss {loss:.3f} acc {train_acc:.0%}  |  test acc {(predict(model, Xte) == yte).mean():.0%}")
 
-    model = SignModel(len(labels))
-    opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
-    loss_fn = nn.CrossEntropyLoss()
-
-    # ponytail: full-batch training (whole train set per step). Switch to a DataLoader with mini-batches
-    # once the dataset is a few thousand clips.
-    for epoch in range(1, args.epochs + 1):
-        model.train()
-        opt.zero_grad()
-        loss = loss_fn(model(torch.tensor(augment(X[train_mask], rng))), ytr)
-        loss.backward()
-        opt.step()
-
-        if epoch % 10 == 0 or epoch == 1:
-            model.eval()
-            with torch.no_grad():
-                train_acc = (model(Xtr).argmax(1) == ytr).float().mean()
-                test_out = model(Xte)
-                test_loss = loss_fn(test_out, yte)
-                test_acc = (test_out.argmax(1) == yte).float().mean()
-            print(f"epoch {epoch:4d}  train loss {loss:.3f} acc {train_acc:.0%}  |  test loss {test_loss:.3f} acc {test_acc:.0%}")
-
-    # Confusion matrix on the test set: row = true sign, column = predicted sign.
-    with torch.no_grad():
-        pred = model(Xte).argmax(1).numpy()
-    cm = np.zeros((len(labels), len(labels)), int)
-    for t, p in zip(yte.numpy(), pred):
-        cm[t, p] += 1
-    width = max(len(l) for l in labels) + 2
-    print("\nTest confusion matrix (rows = true, columns = predicted)")
-    print(" " * width + "".join(f"{l:>{width}}" for l in labels))
-    for l, row in zip(labels, cm):
-        print(f"{l:>{width}}" + "".join(f"{v:>{width}}" for v in row))
+    model = fit(X[train_mask], y[train_mask], len(labels), rng, args.epochs, report)
+    print_confusion(yte, predict(model, Xte), labels, "Test confusion matrix")
 
     Path("models").mkdir(exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "labels": labels}, "models/sign_model.pt")
