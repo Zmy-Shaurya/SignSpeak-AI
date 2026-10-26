@@ -60,9 +60,9 @@ Real-time **American Sign Language (ASL)** recognition from an ordinary webcam. 
 | `me`, `you`, `what`, `where`, `want`, `water` | ASL signs: people, questions, needs |
 | `nothing` | no sign / unknown sign (idle movement plus 50 unrelated ASL signs) |
 
-Trained on about 540 clips: the author's own recordings, a second signer, and about 30 clips per sign from the [ASL Citizen](https://www.microsoft.com/en-us/research/project/asl-citizen/) dataset (42 different signers, everyday webcams).
+Trained on about 630 clips: the author's own recordings, a second signer, and about 30 clips per sign from the [ASL Citizen](https://www.microsoft.com/en-us/research/project/asl-citizen/) dataset (42 different signers, everyday webcams).
 
-**Accuracy on held-out test clips: about 77% across 14 classes** (mean over 3 random splits, 74–80%). Strongest: please, hello, want, sorry (89–96%). Weakest: the short pointing signs me (50%) and you (61%), and no (56%), which get confused with nearby chest/face signs.
+**Accuracy: 82.5% across 14 classes** (5-fold cross-validation over 628 clips, so every clip is tested once; fold std 1.7%). Strongest: want, sorry, please (96–98%). Weakest: where (65%), me (66%), yes (68%). Run `python train.py --cv` to reproduce.
 
 ## Requirements
 
@@ -246,7 +246,7 @@ The `learning/` scripts are standalone exercises. Run step 4 as a module from th
 - **Small vocabulary** (13 signs plus `nothing`), with about 30–50 clips each.
 - **No facial expressions.** Signs that differ only by facial grammar can't be distinguished.
 - **Latency:** predictions use a 3-second window, so results trail the sign by up to about 3 seconds.
-- **Test accuracy varies ±10% between random splits** because the test set is small (about 70 clips).
+- **A single random test split swings ±5–10%** because it holds only about 125 clips; use `train.py --cv` for numbers worth comparing.
 
 ## Roadmap
 

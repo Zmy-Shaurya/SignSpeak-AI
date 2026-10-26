@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SignSpeak AI</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <div class="brand">SignSpeak <span>AI</span></div>
+    <div class="status" id="status" data-state="connecting">
+      <span class="dot"></span><span id="status-text">Connecting</span><span class="fps" id="fps"></span>
+    </div>
+  </header>
+
+  <main>
+    <section class="stage">
+      <div class="video-wrap"><img id="video" src="/video" alt="Camera feed"></div>
+      <div class="toolbar">
+        <label for="camera">Camera</label>
+        <select id="camera"></select>
+        <button id="rescan" type="button">Rescan</button>
+        <span class="hint" id="camera-msg"></span>
+      </div>
+    </section>
+
+    <aside>
+      <section class="card">
+        <h2>Detected sign</h2>
+        <div class="sign" id="sign">&ndash;</div>
+        <div class="confidence"><div class="bar" id="sign-bar"></div></div>
+        <div class="hint" id="sign-hint"></div>
+      </section>
+
+      <section class="card">
+        <h2>Transcript <button id="clear" type="button" class="link">Clear</button></h2>
+        <div class="words" id="words"></div>
+        <div class="sentence" id="sentence"></div>
+      </section>
+
+      <section class="card">
+        <h2>Class probabilities</h2>
+        <div class="probs" id="probs"></div>
+      </section>
+
+      <section class="card">
+        <h2>Settings</h2>
+        <div class="setting"><label for="threshold">Confidence threshold</label><output id="threshold-out"></output>
+          <input type="range" id="threshold" min="0.5" max="1" step="0.01"></div>
+        <div class="setting"><label for="hold">Hold frames</label><output id="hold-out"></output>
+          <input type="range" id="hold" min="1" max="15" step="1"></div>
+        <div class="setting"><label for="pause">Pause ends sentence (s)</label><output id="pause-out"></output>
+          <input type="range" id="pause" min="0.5" max="10" step="0.5"></div>
+        <label class="check"><input type="checkbox" id="mute"> Mute speech</label>
+      </section>
+    </aside>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
