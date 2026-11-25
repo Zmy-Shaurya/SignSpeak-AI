@@ -20,6 +20,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import queue
 import threading
 import time
@@ -36,7 +37,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from engine import Recognizer, load_model, model_info
-from sentence import MODEL, make_speaker, to_sentence
+from sentence import MODEL, make_speaker, phrase
 
 BACKENDS = {"any": cv2.CAP_ANY, "dshow": cv2.CAP_DSHOW, "msmf": cv2.CAP_MSMF}
 WEB = Path(__file__).with_name("web")
@@ -63,7 +64,7 @@ class Pipeline:
         model, self.labels = load_model()
         self.model = {**model_info(), "classes": len(self.labels)}
         self.recognizer = Recognizer(model, self.labels, self._on_sentence)
-        self.mute, self.sentence = False, ""
+        self.mute, self.sentence, self.sentence_source = False, "", None
         self.status, self.message, self.fps, self.camera_open = "starting", "Opening camera", 0.0, False
         self.started, self.frames, self.sentences_spoken = time.time(), 0, 0
         self.latency_ms = deque(maxlen=300)  # Holistic + model time per processed frame (skipped frames excluded)
@@ -96,6 +97,7 @@ class Pipeline:
             "warming": r["warming"], "label": r["label"], "confidence": r["confidence"], "probs": r["probs"],
             "streak": r.get("streak", 0), "idle": r.get("idle", 0.0), "quality": r.get("quality"),
             "labels": self.labels, "words": rec.get_words(), "sentence": self.sentence,
+            "sentence_source": self.sentence_source, "gemini": bool(os.environ.get("GEMINI_API_KEY")),
             "settings": {"threshold": rec.threshold, "hold": rec.hold, "pause": rec.pause, "stride": rec.stride,
                          "mute": self.mute},
             "model": self.model,
@@ -152,8 +154,9 @@ class Pipeline:
             kind, text = self._speech.get()
             if kind == "words":
                 self.sentence = "..."
-                self.sentence = text = to_sentence(text, MODEL)
-                log.info("sentence: %s", text)
+                text, self.sentence_source = phrase(text, MODEL)
+                self.sentence = text
+                log.info("sentence (%s): %s", self.sentence_source, text)
             if self.mute:
                 continue
             try:

@@ -11,7 +11,7 @@ def test_plain_sentence():
 
 def test_no_key_falls_back_to_plain(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    assert sentence.to_sentence(["hello", "help", "please"]) == "Hello, help, please."
+    assert sentence.phrase(["hello", "help", "please"]) == ("Hello, help, please.", "plain")
 
 
 def test_gemini_reply_is_used(monkeypatch):
@@ -25,7 +25,7 @@ def test_gemini_reply_is_used(monkeypatch):
         return io.BytesIO(json.dumps(reply).encode())
 
     monkeypatch.setattr(sentence.urllib.request, "urlopen", fake_urlopen)
-    assert sentence.to_sentence(["hello", "help"]) == "Hello, I need help."
+    assert sentence.phrase(["hello", "help"]) == ("Hello, I need help.", "gemini")
     assert seen["key"] == "test-key"  # sent as a header, never in the URL
     assert "HELLO HELP" in seen["body"]["contents"][0]["parts"][0]["text"]
 
@@ -38,3 +38,4 @@ def test_network_error_falls_back_to_plain(monkeypatch):
 
     monkeypatch.setattr(sentence.urllib.request, "urlopen", broken)
     assert sentence.to_sentence(["water", "please"]) == "Water, please."
+    assert sentence.phrase(["water"])[1] == "fallback"

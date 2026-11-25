@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
   <title>SignSpeak AI</title>
+  <link rel="preload" href="/static/vendor/inter-variable-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/style.css">
   <script>
-    // Set the theme before first paint so the page never flashes the wrong one.
-    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    // Apply saved preferences before first paint so the page never flashes the wrong theme or caption size.
+    try {
+      const t = localStorage.getItem("theme"); if (t && t !== "system") document.documentElement.dataset.theme = t;
+      if (localStorage.getItem("captionSize") === "large") document.documentElement.classList.add("caption-large");
+    } catch (e) {}
   </script>
 </head>
 <body>
@@ -24,7 +28,14 @@
       <div class="status" id="status" data-state="connecting" role="status" aria-live="polite">
         <span class="dot" aria-hidden="true"></span><span id="status-text">Connecting</span><span class="fps" id="fps"></span>
       </div>
-      <button id="theme" type="button" class="btn ghost" aria-label="Toggle light and dark theme">Theme</button>
+      <span class="badge" id="nlp-badge" title=""><span id="nlp-icon"></span><span id="nlp-text"></span></span>
+      <div class="segmented" role="radiogroup" aria-label="Theme" id="theme">
+        <button type="button" role="radio" data-choice="light" aria-label="Light theme" title="Light"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#sun"/></svg></button>
+        <button type="button" role="radio" data-choice="dark" aria-label="Dark theme" title="Dark"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#moon"/></svg></button>
+        <button type="button" role="radio" data-choice="system" aria-label="Follow the system theme" title="Auto"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#monitor"/></svg></button>
+      </div>
+      <button id="present" type="button" class="btn"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#projector-screen"/></svg>Present</button>
+      <button id="help-open" type="button" class="btn ghost" aria-haspopup="dialog"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#question"/></svg>Help</button>
     </div>
   </header>
 
@@ -33,12 +44,12 @@
       <div class="video-card">
         <div class="video-toolbar">
           <label class="field">
-            <span class="field-label">Camera</span>
+            <span class="field-label"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#video-camera"/></svg>Camera</span>
             <select id="camera"></select>
           </label>
-          <button id="rescan" type="button" class="btn">Rescan</button>
+          <button id="rescan" type="button" class="btn"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#arrows-clockwise"/></svg><span id="rescan-text">Rescan</span></button>
           <ul class="tracking" id="tracking" aria-label="Tracking" hidden>
-            <li data-part="body">Body</li><li data-part="left_hand">Left hand</li><li data-part="right_hand">Right hand</li>
+            <li data-part="body"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#person-simple"/></svg>Body</li><li data-part="left_hand"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#hand"/></svg>Left hand</li><li data-part="right_hand"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#hand"/></svg>Right hand</li>
           </ul>
         </div>
 
@@ -50,18 +61,21 @@
               <span class="caption-conf" id="caption-conf"></span>
             </div>
             <div class="hold" aria-hidden="true"><div class="hold-fill" id="hold-fill"></div></div>
+            <p class="caption-alts" id="caption-alts"></p>
           </div>
+          <p class="present-sentence" id="present-sentence" aria-hidden="true"></p>
+          <button id="present-exit" type="button" class="btn present-exit"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#corners-in"/></svg>Exit presentation</button>
           <div class="empty" id="notice" role="alert" hidden>
             <div class="empty-body">
               <p class="empty-title" id="notice-title">No camera picture</p>
               <p class="empty-text" id="notice-text"></p>
               <div class="empty-actions">
-                <button id="next-camera" type="button" class="btn primary">Try next camera</button>
+                <button id="next-camera" type="button" class="btn primary"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#video-camera"/></svg>Try next camera</button>
               </div>
             </div>
           </div>
           <div class="banner" id="framing" role="status" hidden>
-            Move back until both shoulders are in frame. Signs are measured relative to them.
+            <svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#warning"/></svg>Move back until both shoulders are in frame. Signs are measured relative to them.
           </div>
         </div>
 
@@ -78,17 +92,23 @@
       <section class="card" aria-labelledby="h-transcript">
         <header class="card-head">
           <h2 id="h-transcript">Transcript</h2>
-          <button id="clear" type="button" class="btn link">Clear</button>
+          <button id="clear" type="button" class="btn link"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#eraser"/></svg>Clear</button>
         </header>
         <div class="words" id="words" aria-live="polite" aria-describedby="words-help"></div>
         <p class="sr-only" id="words-help">Drag words to reorder, or focus one and press Shift and an arrow key. Delete removes it.</p>
         <div class="pause" aria-hidden="true"><div class="pause-fill" id="pause-fill"></div></div>
         <div class="sentence" id="sentence" aria-live="polite"></div>
         <div class="actions">
-          <button id="speak" type="button" class="btn primary">Speak now</button>
-          <button id="repeat" type="button" class="btn">Repeat last</button>
+          <button id="speak" type="button" class="btn primary"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#speaker-high"/></svg>Speak now</button>
+          <button id="repeat" type="button" class="btn"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#arrow-counter-clockwise"/></svg>Repeat last</button>
         </div>
-        <ol class="history" id="history" aria-label="Earlier sentences"></ol>
+        <div class="history-wrap" id="history-wrap" hidden>
+          <div class="history-head">
+            <h3>Earlier</h3>
+            <button id="export" type="button" class="btn link"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#download-simple"/></svg>Download</button>
+          </div>
+          <ol class="history" id="history" aria-label="Earlier sentences"></ol>
+        </div>
       </section>
 
       <section class="card" aria-labelledby="h-vocab">
@@ -101,7 +121,7 @@
       </section>
 
       <details class="card settings">
-        <summary class="card-head"><h2>Recognition settings</h2></summary>
+        <summary class="card-head"><h2 class="with-icon"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#gear-six"/></svg>Settings</h2></summary>
         <div class="setting"><label for="threshold">Confidence threshold</label><output id="threshold-out"></output>
           <input type="range" id="threshold" min="0.5" max="1" step="0.01"></div>
         <div class="setting"><label for="hold">Hold to accept (analysed frames)</label><output id="hold-out"></output>
@@ -111,14 +131,44 @@
         <div class="setting"><label for="stride">Frames analysed</label><output id="stride-out"></output>
           <input type="range" id="stride" min="1" max="3" step="1"></div>
         <label class="check"><input type="checkbox" id="mute"> Mute speech</label>
+        <label class="check"><input type="checkbox" id="caption-size"> Large captions</label>
       </details>
     </aside>
   </main>
 
   <footer class="appfoot">
-    <p>Shortcuts: <kbd>S</kbd> speak now <kbd>C</kbd> clear <kbd>M</kbd> mute <kbd>N</kbd> next camera</p>
+    <p>Press <kbd>?</kbd> for help and keyboard shortcuts</p>
     <p id="model-info"></p>
   </footer>
+
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <dialog id="help" aria-labelledby="help-title">
+    <form method="dialog" class="dialog">
+      <header class="dialog-head">
+        <h2 id="help-title">How SignSpeak works</h2>
+        <button type="submit" class="btn ghost icon-only" aria-label="Close"><svg class="icon" aria-hidden="true"><use href="/static/vendor/icons.svg#x"/></svg></button>
+      </header>
+      <ol class="steps">
+        <li><strong>Frame yourself.</strong> Stand waist-up with both shoulders visible. The Body badge on the video turns green when you're tracked.</li>
+        <li><strong>Sign one word at a time.</strong> Hold the sign until the bar under the caption fills, then lower your hands. The word joins the transcript.</li>
+        <li><strong>Pause to speak.</strong> Stop signing for a moment and the words become a sentence that is spoken aloud. Or press Speak now.</li>
+      </ol>
+      <p class="muted small">Fix mistakes in the transcript: drag words to reorder, press the cross to remove one, or click a sign in Vocabulary to add it.</p>
+      <h3>Keyboard shortcuts</h3>
+      <dl class="shortcuts">
+        <div><dt><kbd>S</kbd></dt><dd>Speak now</dd></div>
+        <div><dt><kbd>C</kbd></dt><dd>Clear words</dd></div>
+        <div><dt><kbd>M</kbd></dt><dd>Mute or unmute speech</dd></div>
+        <div><dt><kbd>N</kbd></dt><dd>Next camera</dd></div>
+        <div><dt><kbd>P</kbd></dt><dd>Presentation mode</dd></div>
+        <div><dt><kbd>?</kbd></dt><dd>This help</dd></div>
+        <div><dt><kbd>Shift</kbd> + arrow</dt><dd>Move the focused word</dd></div>
+        <div><dt><kbd>Delete</kbd></dt><dd>Remove the focused word</dd></div>
+      </dl>
+      <div class="dialog-foot"><button type="submit" class="btn primary">Got it</button></div>
+    </form>
+  </dialog>
   <script src="/static/app.js"></script>
 </body>
 </html>

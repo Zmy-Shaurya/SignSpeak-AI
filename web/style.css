@@ -34,12 +34,19 @@
   }
 }
 
+/* Inter (variable, latin subset), self-hosted so the demo looks the same on every laptop and works offline. */
+@font-face {
+  font-family: "Inter"; src: url("vendor/inter-variable-latin.woff2") format("woff2");
+  font-weight: 100 900; font-style: normal; font-display: swap;
+}
+
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; min-height: 100dvh; display: flex; flex-direction: column;
   background: var(--bg); color: var(--text);
-  font: 14px/1.5 "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  font: 14px/1.5 "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  font-feature-settings: "cv11";  /* single-storey a: calmer at UI sizes */
   -webkit-font-smoothing: antialiased;
 }
 h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.005em; }
@@ -50,8 +57,13 @@ p { margin: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 [hidden] { display: none !important; }
 
+/* ---------- icons (Phosphor sprite, colour from the surrounding text) ---------- */
+.icon { width: 16px; height: 16px; flex: none; fill: currentColor; }
+.with-icon { display: inline-flex; align-items: center; gap: 8px; }
+
 /* ---------- buttons and fields ---------- */
 .btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   font: inherit; font-weight: 500; color: var(--text); background: var(--surface);
   border: 1px solid var(--line-strong); border-radius: var(--r-ctl); padding: 6px 14px; cursor: pointer;
   transition: background-color .15s, border-color .15s, transform .08s;
@@ -63,13 +75,16 @@ p { margin: 0; }
 .btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
 .btn.ghost:hover { color: var(--text); background: var(--subtle); }
-.btn.link { border: 0; background: none; padding: 2px 4px; color: var(--accent); font-size: 13px; }
+.btn.link { border: 0; background: none; padding: 2px 4px; color: var(--accent); font-size: 13px; gap: 4px; }
+.btn.link .icon { width: 14px; height: 14px; }
+.btn.icon-only { padding: 6px; }
+.btn.icon-only .icon { width: 18px; height: 18px; }
 select {
   font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line-strong);
   border-radius: var(--r-ctl); padding: 6px 10px; cursor: pointer;
 }
 .field { display: flex; align-items: center; gap: 8px; }
-.field-label { color: var(--muted); font-size: 13px; }
+.field-label { color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
 kbd {
   font: 11px ui-monospace, "Cascadia Mono", Consolas, monospace; padding: 1px 6px; margin: 0 4px 0 10px;
   border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; background: var(--surface); color: var(--text);
@@ -126,9 +141,9 @@ kbd:first-child { margin-left: 4px; }
   display: flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px;
   color: var(--muted); border: 1px solid var(--line);
 }
-.tracking li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--line-strong); }
+.tracking .icon { width: 14px; height: 14px; }
 .tracking li.on { color: var(--text); border-color: var(--line-strong); }
-.tracking li.on::before { background: var(--ok); }
+.tracking li.on .icon { color: var(--ok); }
 
 /* Full width; 4:3 like most webcams, but never taller than the screen leaves room for (toolbar and stats stay
    visible). 75cqw = 3/4 of the card's width, via the container below. The picture letterboxes inside. */
@@ -160,6 +175,7 @@ kbd:first-child { margin-left: 4px; }
   position: absolute; top: 16px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
   padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
   background: rgb(245 181 68 / .95); color: #1a1205; animation: rise .18s ease-out;
+  display: flex; align-items: center; gap: 8px;
 }
 
 .video-stats {
@@ -186,8 +202,9 @@ kbd:first-child { margin-left: 4px; }
 .chip.drop-target { box-shadow: -3px 0 0 var(--accent); }
 .chip button {
   display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
-  background: none; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer;
+  background: none; color: var(--muted); cursor: pointer;
 }
+.chip button .icon { width: 12px; height: 12px; }
 .chip button:hover { background: var(--surface); color: var(--bad); }
 .words .empty-words { color: var(--muted); }
 
@@ -243,3 +260,99 @@ kbd:first-child { margin-left: 4px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- app bar extras: Gemini badge, theme switch ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500;
+  border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+}
+.badge .icon { width: 14px; height: 14px; }
+.badge:has(#nlp-text:empty) { display: none; }
+#nlp-icon { display: contents; }
+.badge.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); }
+.segmented { display: inline-flex; padding: 2px; border-radius: var(--r-ctl); background: var(--subtle); border: 1px solid var(--line); }
+.segmented button {
+  display: grid; place-items: center; color: var(--muted); background: none; border: 0;
+  padding: 5px 9px; border-radius: 6px; cursor: pointer;
+}
+.segmented button:hover { color: var(--text); }
+.segmented button[aria-checked="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+@media (max-width: 900px) { .segmented, .badge { display: none; } }
+
+/* ---------- caption: runner-up signs, large size ---------- */
+.caption-alts { margin-top: 8px; font-size: 12px; color: rgb(255 255 255 / .62); font-variant-numeric: tabular-nums; }
+.caption-alts:empty { display: none; }
+.caption-large .caption-sign { font-size: 46px; }
+.caption-large .caption-conf { font-size: 17px; }
+
+/* ---------- accepted word: brief highlight so the cause and effect is visible ---------- */
+.chip.fresh { animation: pop .18s ease-out, fresh 1.2s ease-out; }
+@keyframes fresh { from { background: var(--accent); color: var(--on-accent); } }
+
+/* ---------- history ---------- */
+.history-wrap { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.history-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.history-head h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.history-wrap .history { margin: 0; padding: 0; border: 0; }
+
+/* ---------- toasts ---------- */
+.toasts {
+  position: fixed; right: 24px; bottom: 24px; z-index: 30; display: grid; gap: 8px; justify-items: end; pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 8px;
+  max-width: 360px; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 500;
+  background: var(--text); color: var(--bg); box-shadow: 0 8px 24px rgb(0 0 0 / .18);
+  animation: rise .2s ease-out;
+}
+.toast.warn { background: var(--warn); color: #1a1205; }
+.toast.leaving { opacity: 0; transform: translateY(4px); transition: opacity .25s, transform .25s; }
+
+/* ---------- help dialog ---------- */
+dialog {
+  width: min(560px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--line); border-radius: var(--r-card);
+  background: var(--surface); color: var(--text); box-shadow: 0 24px 64px rgb(0 0 0 / .3);
+}
+dialog::backdrop { background: rgb(8 10 14 / .55); backdrop-filter: blur(2px); }
+dialog[open] { animation: rise .2s ease-out; }
+.dialog { padding: 20px 24px 24px; display: grid; gap: 14px; }
+.dialog-head { display: flex; justify-content: space-between; align-items: center; }
+.dialog-head h2 { font-size: 17px; }
+.dialog h3 { margin: 6px 0 0; font-size: 13px; font-weight: 600; }
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 12px; }
+.steps li { counter-increment: step; position: relative; padding-left: 38px; min-height: 26px; }
+.steps li::before {
+  content: counter(step); position: absolute; left: 0; top: -1px;
+  display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 13px;
+}
+.shortcuts { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; font-size: 13px; }
+.shortcuts div { display: flex; gap: 10px; align-items: center; }
+.shortcuts dt { min-width: 74px; }
+.shortcuts kbd { margin: 0; }
+.shortcuts dd { margin: 0; color: var(--muted); }
+.dialog-foot { display: flex; justify-content: flex-end; margin-top: 4px; }
+
+/* ---------- presentation mode: video and captions only, readable across a room ---------- */
+.present-sentence, .present-exit { display: none; }
+.presenting body { background: #07090c; }
+.presenting .appbar, .presenting .side, .presenting .appfoot,
+.presenting .video-toolbar, .presenting .video-stats { display: none; }
+.presenting .workspace { display: block; max-width: none; padding: 0; }
+.presenting .video-card { border: 0; border-radius: 0; box-shadow: none; }
+.presenting .video-frame { height: 100dvh; }
+.presenting .caption { left: 50%; right: auto; bottom: 40px; transform: translateX(-50%); min-width: min(640px, 90vw); padding: 18px 24px; }
+.presenting .caption-sign { font-size: 64px; }
+.presenting .caption-conf { font-size: 20px; }
+.presenting .present-sentence {
+  display: block; position: absolute; top: 32px; left: 50%; transform: translateX(-50%); width: max-content; max-width: 90vw;
+  padding: 10px 22px; border-radius: 12px; background: rgb(8 10 14 / .7); color: #fff;
+  font-size: 30px; font-weight: 600; text-align: center;
+}
+.presenting .present-sentence:empty { display: none; }
+.presenting .present-exit {
+  display: block; position: absolute; top: 16px; right: 16px; opacity: .35; transition: opacity .2s;
+}
+.presenting .present-exit:hover, .presenting .present-exit:focus-visible { opacity: 1; }
+.presenting .caption-alts { font-size: 16px; }

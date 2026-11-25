@@ -8,6 +8,17 @@ const el = (tag, className, text) => {
   return node;
 };
 
+const SVG = "http://www.w3.org/2000/svg";
+function icon(name) {  // a Phosphor icon from the local sprite (web/vendor/icons.svg)
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", "icon");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", `/static/vendor/icons.svg#${name}`);
+  svg.append(use);
+  return svg;
+}
+
 const STATUS_TEXT = {
   live: "Live", starting: "Starting", error: "Camera error", no_signal: "No picture", connecting: "Connecting", offline: "Server offline",
 };
@@ -25,12 +36,53 @@ async function send(method, url, body) {
 }
 const post = (url, body) => send("POST", url, body);
 
-/* ---------- theme ---------- */
-$("theme").addEventListener("click", () => {
+const store = {  // per-browser preferences; private mode may block storage, then they just don't persist
+  get: (key) => { try { return localStorage.getItem(key); } catch (e) { return null; } },
+  set: (key, value) => { try { localStorage.setItem(key, value); } catch (e) { /* not persisted */ } },
+};
+
+/* ---------- toasts: short confirmations for things that otherwise happen silently ---------- */
+function toast(message, kind = "") {
+  const node = el("div", `toast ${kind}`);
+  node.append(icon(kind === "warn" ? "warning" : "check-circle"), el("span", "", message));
+  $("toasts").append(node);
+  setTimeout(() => { node.classList.add("leaving"); setTimeout(() => node.remove(), 300); }, 3200);
+}
+
+/* ---------- theme: light, dark or follow the system ---------- */
+function setTheme(choice) {
   const root = document.documentElement;
-  const dark = (root.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark";
-  root.dataset.theme = dark ? "light" : "dark";
-  try { localStorage.setItem("theme", root.dataset.theme); } catch (e) { /* private mode: theme just won't persist */ }
+  if (choice === "system") delete root.dataset.theme;
+  else root.dataset.theme = choice;
+  for (const b of $("theme").children) b.setAttribute("aria-checked", String(b.dataset.choice === choice));
+  store.set("theme", choice);
+}
+for (const b of $("theme").children) b.addEventListener("click", () => setTheme(b.dataset.choice));
+setTheme(store.get("theme") || "system");
+
+/* ---------- caption size ---------- */
+$("caption-size").checked = store.get("captionSize") === "large";
+$("caption-size").addEventListener("change", (e) => {
+  document.documentElement.classList.toggle("caption-large", e.target.checked);
+  store.set("captionSize", e.target.checked ? "large" : "normal");
+});
+
+/* ---------- help dialog, opened automatically on the first visit ---------- */
+function openHelp() { if (!$("help").open) $("help").showModal(); }
+$("help-open").addEventListener("click", openHelp);
+$("help").addEventListener("close", () => store.set("onboarded", "1"));
+if (!store.get("onboarded")) openHelp();
+
+/* ---------- presentation mode: video and big captions only, fullscreen when the browser allows ---------- */
+function setPresenting(on) {
+  document.documentElement.classList.toggle("presenting", on);
+  if (on) document.documentElement.requestFullscreen?.().catch(() => { /* not allowed: still a clean full-window view */ });
+  else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+}
+$("present").addEventListener("click", () => setPresenting(true));
+$("present-exit").addEventListener("click", () => setPresenting(false));
+document.addEventListener("fullscreenchange", () => {  // Esc in fullscreen is handled by the browser, not our keydown
+  if (!document.fullscreenElement) document.documentElement.classList.remove("presenting");
 });
 
 /* ---------- cameras ---------- */
@@ -48,7 +100,7 @@ function renderCameras() {
 
 async function scan() {
   $("rescan").disabled = true;
-  $("rescan").textContent = "Scanning...";
+  $("rescan-text").textContent = "Scanning...";
   try {
     cameras = await (await fetch("/api/cameras")).json();
     renderCameras();
@@ -56,7 +108,7 @@ async function scan() {
     $("warmup").textContent = "Camera scan failed";
   } finally {
     $("rescan").disabled = false;
-    $("rescan").textContent = "Rescan";
+    $("rescan-text").textContent = "Rescan";
   }
 }
 
@@ -90,12 +142,31 @@ $("speak").addEventListener("click", () => post("/api/speak").catch(() => {})); 
 $("repeat").addEventListener("click", () => post("/api/repeat").catch(() => {}));
 
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || $("help").open || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+  if (e.key === "?") { e.preventDefault(); openHelp(); return; }
+  if (e.key === "Escape") { setPresenting(false); return; }
+  if (e.shiftKey) return;  // Shift+arrows belong to the word chips
   const key = e.key.toLowerCase();
   if (key === "s") $("speak").click();
   else if (key === "c") editWords([]);
-  else if (key === "m") post("/api/settings", { mute: !$("mute").checked });
+  else if (key === "m") {
+    const mute = !$("mute").checked;
+    post("/api/settings", { mute }).then(() => toast(mute ? "Speech muted" : "Speech on"));
+  }
   else if (key === "n") nextCamera();
+  else if (key === "p") setPresenting(!document.documentElement.classList.contains("presenting"));
+});
+
+/* ---------- transcript download ---------- */
+$("export").addEventListener("click", () => {
+  const lines = [...history].reverse().map((h) => `${h.time}  ${h.text}`);
+  const blob = new Blob([`SignSpeak AI transcript, ${new Date().toLocaleString()}\n\n${lines.join("\n")}\n`], { type: "text/plain" });
+  const link = Object.assign(document.createElement("a"), {
+    href: URL.createObjectURL(blob), download: `signspeak-transcript-${new Date().toISOString().slice(0, 10)}.txt`,
+  });
+  link.click();
+  URL.revokeObjectURL(link.href);
+  toast("Transcript downloaded");
 });
 
 /* ---------- sentence builder: edit the accepted words ---------- */
@@ -127,12 +198,15 @@ function moveWord(from, to) {
   editWords(next, to);
 }
 
+let freshIndex = -1;  // a word the recognizer just accepted: its chip flashes once
+
 function chip(word, i) {
-  const node = el("span", "chip", pretty(word));
+  const node = el("span", i === freshIndex ? "chip fresh" : "chip", pretty(word));
   node.tabIndex = 0;
   node.draggable = true;
   node.setAttribute("aria-label", `${pretty(word)}, word ${i + 1} of ${words.length}`);
-  const remove = el("button", "", "×");
+  const remove = el("button");
+  remove.append(icon("x"));
   remove.type = "button";
   remove.setAttribute("aria-label", `Remove ${pretty(word)}`);
   remove.addEventListener("click", () => editWords(words.filter((_, j) => j !== i), Math.min(i, words.length - 2)));
@@ -163,7 +237,7 @@ function renderWords(focusIndex) {
 /* ---------- live state ---------- */
 const tiles = {};  // sign name -> tile element, built once so the order never jumps
 let history = [];
-let lastSentence = "";
+let lastSentence = null;  // null until the first state arrives
 
 function buildVocab(names) {
   const sorted = [...names].sort();
@@ -199,6 +273,7 @@ function renderVocab(s) {
 }
 
 function renderHistory() {
+  $("history-wrap").hidden = !history.length;
   $("history").replaceChildren(...history.slice(0, 5).map((h) => {
     const li = el("li");
     li.append(el("time", "", h.time), el("span", "", h.text));
@@ -208,8 +283,11 @@ function renderHistory() {
 
 function renderTranscript(s) {
   if (dragFrom === null && editsPending === 0 && performance.now() > trustServerAfter) {  // not mid-drag or mid-edit
+    const accepted = s.words.length === words.length + 1 && words.every((w, i) => w === s.words[i]);
+    freshIndex = accepted ? s.words.length - 1 : -1;
     words = s.words;
     renderWords();
+    freshIndex = -1;
   }
 
   const sentence = $("sentence");
@@ -221,8 +299,22 @@ function renderTranscript(s) {
   if (s.sentence && !busy && s.sentence !== lastSentence) {
     history.unshift({ text: s.sentence, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
     renderHistory();
+    if (lastSentence !== null) {  // not on page load, only for sentences made while watching
+      if (s.sentence_source === "fallback") toast("Gemini was unreachable, so the words were joined plainly", "warn");
+      else toast(s.settings.mute ? "Sentence ready (speech muted)" : "Sentence spoken");
+    }
   }
   if (!busy) lastSentence = s.sentence;
+  $("present-sentence").textContent = busy ? "" : s.sentence;
+
+  if ($("nlp-text").textContent !== (s.gemini ? "Gemini phrasing" : "Offline phrasing")) {
+    $("nlp-text").textContent = s.gemini ? "Gemini phrasing" : "Offline phrasing";
+    $("nlp-icon").replaceChildren(icon(s.gemini ? "sparkle" : "wifi-slash"));
+  }
+  $("nlp-badge").classList.toggle("on", s.gemini);
+  $("nlp-badge").title = s.gemini
+    ? "Signed words are rewritten into natural English by Gemini, with a plain fallback if it is unreachable"
+    : "No GEMINI_API_KEY: signed words are joined into a plain sentence";
 
   const pausing = s.words.length && !s.label && !s.warming;  // the engine is counting a pause
   $("pause-fill").style.width = pausing ? `${Math.min(100, (s.idle / s.settings.pause) * 100)}%` : "0%";
@@ -230,6 +322,7 @@ function renderTranscript(s) {
 
 function renderCamera(s) {
   const cam = s.camera;
+  if (activeCamera !== null && activeCamera !== cam.index) toast(`Switched to camera ${cam.index}`);
   activeCamera = cam.index;
   setStatus(cam.status, cam.status === "live" ? cam.fps : null);
   if (cameras.length && $("camera").value !== String(activeCamera)) renderCameras();
@@ -272,6 +365,9 @@ function renderCaption(s) {
   $("caption-sign").textContent = pretty(s.label);
   $("caption-conf").textContent = `${Math.round(s.confidence * 100)}%`;
   $("hold-fill").style.width = `${Math.min(100, (s.streak / s.settings.hold) * 100)}%`;
+  const runnersUp = Object.entries(s.probs).filter(([name]) => name !== s.label).sort((a, b) => b[1] - a[1]).slice(0, 2);
+  $("caption-alts").textContent = runnersUp.length
+    ? `Next: ${runnersUp.map(([name, p]) => `${pretty(name)} ${Math.round(p * 100)}%`).join(", ")}` : "";
 }
 
 function render(s) {

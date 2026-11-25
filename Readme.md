@@ -400,5 +400,6 @@ Third-party data keeps its own license: ASL Citizen is **not** included and is l
 - [MediaPipe](https://github.com/google-ai-edge/mediapipe) (Google): body and hand landmark detection
 - [PyTorch](https://pytorch.org/): model training
 - [OpenCV](https://opencv.org/): video capture and processing
+- [Phosphor Icons](https://phosphoricons.com/) (MIT) and the [Inter](https://rsms.me/inter/) typeface (SIL Open Font License): bundled in `web/vendor/` with their licences, so the UI works offline
 - [ASL Citizen](https://www.microsoft.com/en-us/research/project/asl-citizen/) (Microsoft Research): Desai et al., *ASL Citizen: A Community-Sourced Dataset for Advancing Isolated Sign Language Recognition*, NeurIPS 2023 Datasets and Benchmarks
 - Sign references: [Lifeprint / ASLU](https://www.lifeprint.com/), [Handspeak](https://www.handspeak.com/), [SignASL](https://www.signasl.org/)

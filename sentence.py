@@ -36,9 +36,14 @@ def plain_sentence(words):
 
 
 def to_sentence(words, model=MODEL):
+    return phrase(words, model)[0]
+
+
+def phrase(words, model=MODEL):
+    """Return (sentence, source). source: 'gemini', 'plain' (no API key) or 'fallback' (Gemini failed)."""
     key = os.environ.get("GEMINI_API_KEY")
     if not key:
-        return plain_sentence(words)
+        return plain_sentence(words), "plain"
     glosses = " ".join(w.upper().replace("_", "-") for w in words)
     body = json.dumps({
         "contents": [{"parts": [{"text": PROMPT.format(glosses=glosses)}]}],
@@ -52,10 +57,11 @@ def to_sentence(words, model=MODEL):
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             text = json.load(response)["candidates"][0]["content"]["parts"][0]["text"]
-        return text.strip().strip('"') or plain_sentence(words)
+        text = text.strip().strip('"')
+        return (text, "gemini") if text else (plain_sentence(words), "fallback")
     except Exception as e:  # offline, timeout, bad key, quota, unexpected reply: all fall back
         print(f"Gemini unavailable ({type(e).__name__}: {e}); using plain sentence.")
-        return plain_sentence(words)
+        return plain_sentence(words), "fallback"
 
 
 def make_speaker():
