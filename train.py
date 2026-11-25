@@ -1,11 +1,15 @@
 """Train the sign classifier on data/keypoints/<sign>/*.npy and save models/sign_model.pt.
 
-Usage: python train.py [--epochs 400] [--cv]
+Usage: python train.py [--epochs 400] [--cv] [--weights none|balanced] [--boost where=1.5,yes=1.5]
 Labels are the folder names. 20% of each sign is held out as a test set the model never trains on.
 --cv: 5-fold cross-validation instead. Every clip is tested exactly once, which gives a far steadier accuracy
 than a single 20% split. Use it to compare data or training changes. It doesn't save a model.
+--weights balanced: weight each sign's loss by 1/clip count, so small classes count as much as `nothing`.
+--boost: extra loss weight for signs the model confuses. Every run is appended to models/train_log.jsonl.
 """
 import argparse
+import json
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -70,11 +74,21 @@ def load_dataset():
     return np.array(X), np.array(y), labels
 
 
-def fit(X, y, n_classes, rng, epochs, report=None):
+def class_weights(y, labels, mode="none", boost=None):
+    """Per-class loss weights, mean 1. 'balanced' = inverse clip count; boost = {sign: factor} on top."""
+    w = np.ones(len(labels))
+    if mode == "balanced":
+        w = len(y) / (len(labels) * np.bincount(y, minlength=len(labels)))
+    for sign, factor in (boost or {}).items():
+        w[labels.index(sign)] *= factor
+    return w / w.mean()
+
+
+def fit(X, y, n_classes, rng, epochs, report=None, weights=None):
     """Train a fresh model on (X, y) with augmentation. report(epoch, loss, model) is called every 10 epochs."""
     model = SignModel(n_classes)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-4)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.CrossEntropyLoss(weight=None if weights is None else torch.tensor(weights, dtype=torch.float32))
     yt = torch.tensor(y)
     # ponytail: full-batch training (whole train set per step). Switch to a DataLoader with mini-batches
     # once the dataset is a few thousand clips.
@@ -110,13 +124,28 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=400)
     parser.add_argument("--cv", action="store_true", help="5-fold cross-validation report; no model saved")
+    parser.add_argument("--weights", choices=["none", "balanced"], default="none", help="per-class loss weighting")
+    parser.add_argument("--boost", default="", help="extra weight for confused signs, e.g. where=1.5,yes=1.5")
     args = parser.parse_args()
+    boost = {k: float(v) for k, v in (pair.split("=") for pair in args.boost.split(",") if pair)}
+
+    def log_run(**results):
+        """Append this run's settings and results to models/train_log.jsonl (the experiment history)."""
+        Path("models").mkdir(exist_ok=True)
+        entry = {"time": datetime.now().isoformat(timespec="seconds"), "mode": "cv" if args.cv else "train",
+                 "epochs": args.epochs, "weights": args.weights, "boost": boost, "samples": len(X), **results}
+        with open("models/train_log.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
 
     torch.manual_seed(0)
     rng = np.random.default_rng(0)
 
     X, y, labels = load_dataset()
     print(f"{len(X)} samples, {len(labels)} signs: " + ", ".join(f"{l}={int((y == i).sum())}" for i, l in enumerate(labels)))
+    unknown = set(boost) - set(labels)
+    assert not unknown, f"--boost names unknown signs: {unknown}"
+    weights = class_weights(y, labels, args.weights, boost)
+    print("loss weights: " + ", ".join(f"{l}={w:.2f}" for l, w in zip(labels, weights)))
 
     probe = X[:8].copy()
     probe[..., 195:] = 0
@@ -131,7 +160,7 @@ if __name__ == "__main__":
         assert all((fold[y == c] == k).any() for c in range(len(labels)) for k in range(5)), "every sign needs 5+ clips"
         pred = np.empty_like(y)
         for k in range(5):
-            model = fit(X[fold != k], y[fold != k], len(labels), rng, args.epochs)
+            model = fit(X[fold != k], y[fold != k], len(labels), rng, args.epochs, weights=weights)
             pred[fold == k] = predict(model, X[fold == k])
             print(f"fold {k + 1}/5: {(pred[fold == k] == y[fold == k]).mean():.0%}")
         accs = [(pred[fold == k] == y[fold == k]).mean() for k in range(5)]
@@ -139,6 +168,8 @@ if __name__ == "__main__":
         per = sorted((float((pred[y == c] == c).mean()), labels[c]) for c in range(len(labels)))
         print("per sign: " + ", ".join(f"{l} {a:.0%}" for a, l in per))
         print_confusion(y, pred, labels, "Cross-validation confusion matrix, all clips")
+        log_run(accuracy=round(float(np.mean(accs)), 4), std=round(float(np.std(accs)), 4),
+                per_sign={l: round(a, 3) for a, l in per})
         raise SystemExit
 
     # Stratified split: every sign gets ~20% in test.
@@ -153,9 +184,10 @@ if __name__ == "__main__":
         train_acc = (predict(model, X[train_mask]) == y[train_mask]).mean()
         print(f"epoch {epoch:4d}  train loss {loss:.3f} acc {train_acc:.0%}  |  test acc {(predict(model, Xte) == yte).mean():.0%}")
 
-    model = fit(X[train_mask], y[train_mask], len(labels), rng, args.epochs, report)
+    model = fit(X[train_mask], y[train_mask], len(labels), rng, args.epochs, report, weights=weights)
     print_confusion(yte, predict(model, Xte), labels, "Test confusion matrix")
 
     Path("models").mkdir(exist_ok=True)
     torch.save({"state_dict": model.state_dict(), "labels": labels}, "models/sign_model.pt")
+    log_run(test_accuracy=round(float((predict(model, Xte) == yte).mean()), 4))
     print("\nSaved models/sign_model.pt")

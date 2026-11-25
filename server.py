@@ -1,37 +1,46 @@
 """SignSpeak AI web server: camera + recognition in a worker thread, a browser UI on top.
 
 Usage (from the repo root): python server.py [--camera 0] [--backend any|dshow|msmf] [--port 8000]
-Then open http://localhost:8000
+Then open http://localhost:8000. Interactive API docs: http://localhost:8000/docs
 
   GET  /video           MJPEG stream of the annotated camera feed
-  GET  /api/events      server-sent events: live state (sign, probabilities, words, sentence, camera status)
+  GET  /api/events      server-sent events: live state, 10 per second
+  GET  /api/state       the same state, once
+  GET  /api/health      liveness plus camera status
+  GET  /api/metrics     fps, inference latency, counters, model version
   GET  /api/cameras     probe camera indices 0-4
   POST /api/camera      {"index": n}  switch camera at runtime
-  POST /api/settings    {"threshold", "hold", "pause", "mute"}  all optional
+  POST /api/settings    {"threshold", "hold", "pause", "stride", "mute"}  all optional
+  PUT  /api/words       {"words": [...]}  replace the word list (delete, reorder, add)
+  POST /api/speak       end the sentence now: phrase and speak the current words
+  POST /api/repeat      speak the last sentence again
   POST /api/clear       drop the accepted words
 """
 import argparse
 import asyncio
 import json
+import logging
 import queue
 import threading
 import time
+from collections import deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import cv2
 import numpy as np
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from engine import Recognizer, load_model
+from engine import Recognizer, load_model, model_info
 from sentence import MODEL, make_speaker, to_sentence
 
 BACKENDS = {"any": cv2.CAP_ANY, "dshow": cv2.CAP_DSHOW, "msmf": cv2.CAP_MSMF}
 WEB = Path(__file__).with_name("web")
+log = logging.getLogger("signspeak")
 
 
 def placeholder(title, detail=""):
@@ -52,34 +61,57 @@ class Pipeline:
     def __init__(self, camera, backend):
         self.camera, self.backend = camera, BACKENDS[backend]
         model, self.labels = load_model()
+        self.model = {**model_info(), "classes": len(self.labels)}
         self.recognizer = Recognizer(model, self.labels, self._on_sentence)
         self.mute, self.sentence = False, ""
         self.status, self.message, self.fps, self.camera_open = "starting", "Opening camera", 0.0, False
+        self.started, self.frames, self.sentences_spoken = time.time(), 0, 0
+        self.latency_ms = deque(maxlen=300)  # Holistic + model time per processed frame (skipped frames excluded)
         self._result = {"warming": True, "label": None, "confidence": 0.0, "probs": {}}
         self._frame, self._frame_no = jpeg(placeholder("Starting camera...")), 0
-        self._sentences = queue.Queue()
+        self._speech = queue.Queue()  # ("words", [...]) to phrase and speak, or ("say", text) to speak as-is
         self._reopen, self._stop = threading.Event(), threading.Event()
         self._reopen.set()
         threading.Thread(target=self._speech_worker, daemon=True).start()
         self._thread = threading.Thread(target=self._capture_loop, daemon=True)
         self._thread.start()
+        log.info("model %s (%d classes), camera %d", self.model["version"], len(self.labels), camera)
 
     # --- public API -------------------------------------------------------------------------------------------
     def switch_camera(self, index):
+        log.info("switching to camera %d", index)
         self.camera = index
         self._reopen.set()
 
-    def clear(self):
-        self.recognizer.words.clear()
+    def repeat(self):
+        if self.sentence and self.sentence != "...":
+            self._speech.put(("say", self.sentence))
+            return True
+        return False
 
     def state(self):
-        r = self._result
+        r, rec = self._result, self.recognizer
         return {
             "camera": {"index": self.camera, "status": self.status, "message": self.message, "fps": round(self.fps, 1)},
             "warming": r["warming"], "label": r["label"], "confidence": r["confidence"], "probs": r["probs"],
-            "words": list(self.recognizer.words), "sentence": self.sentence,
-            "settings": {"threshold": self.recognizer.threshold, "hold": self.recognizer.hold,
-                         "pause": self.recognizer.pause, "mute": self.mute},
+            "streak": r.get("streak", 0), "idle": r.get("idle", 0.0), "quality": r.get("quality"),
+            "labels": self.labels, "words": rec.get_words(), "sentence": self.sentence,
+            "settings": {"threshold": rec.threshold, "hold": rec.hold, "pause": rec.pause, "stride": rec.stride,
+                         "mute": self.mute},
+            "model": self.model,
+        }
+
+    def metrics(self):
+        lat = np.array(self.latency_ms) if self.latency_ms else np.zeros(1)
+        return {
+            "uptime_s": round(time.time() - self.started, 1),
+            "camera_status": self.status,
+            "fps": round(self.fps, 1),
+            "frames_inferred": self.frames,
+            "inference_ms": {"mean": round(float(lat.mean()), 1), "p50": round(float(np.percentile(lat, 50)), 1),
+                             "p95": round(float(np.percentile(lat, 95)), 1), "samples": len(self.latency_ms)},
+            "sentences_spoken": self.sentences_spoken,
+            "model": self.model,
         }
 
     def latest_frame(self):
@@ -107,20 +139,29 @@ class Pipeline:
         self._frame, self._frame_no = jpeg(img), self._frame_no + 1
 
     def _set_status(self, status, message=""):
+        if status != self.status:
+            (log.info if status in ("live", "starting") else log.warning)("camera %d: %s %s", self.camera, status, message)
         self.status, self.message = status, message
 
     def _on_sentence(self, words):
-        self._sentences.put(words)
+        self._speech.put(("words", words))
 
     def _speech_worker(self):
-        speak = make_speaker()  # created on this thread (COM rule)
+        speak = None  # created on first use, on this thread (COM rule); keeps startup and tests free of audio
         while True:
-            words = self._sentences.get()
-            self.sentence = "..."
-            self.sentence = to_sentence(words, MODEL)
-            print("Sentence:", self.sentence)
-            if not self.mute:
-                speak(self.sentence)
+            kind, text = self._speech.get()
+            if kind == "words":
+                self.sentence = "..."
+                self.sentence = text = to_sentence(text, MODEL)
+                log.info("sentence: %s", text)
+            if self.mute:
+                continue
+            try:
+                speak = speak or make_speaker()
+                speak(text)
+                self.sentences_spoken += 1
+            except Exception:  # no audio device / SAPI voice: keep showing text, never kill the thread
+                log.exception("speech failed")
 
     def _capture_loop(self):
         cap, count, t0 = None, 0, time.time()
@@ -158,7 +199,11 @@ class Pipeline:
                 time.sleep(0.05)
                 continue
             self._set_status("live")
+            start = time.perf_counter()
             self._result = self.recognizer.process(frame)
+            if self.recognizer.inferred:
+                self.latency_ms.append((time.perf_counter() - start) * 1000)
+                self.frames += 1
             self._publish(cv2.flip(frame, 1))  # mirror for display only, after drawing
             count += 1
             if time.time() - t0 >= 1:
@@ -171,11 +216,16 @@ class Settings(BaseModel):
     threshold: float | None = Field(None, ge=0.5, le=1.0)
     hold: int | None = Field(None, ge=1, le=15)
     pause: float | None = Field(None, ge=0.5, le=10.0)
+    stride: int | None = Field(None, ge=1, le=3)
     mute: bool | None = None
 
 
 class CameraChoice(BaseModel):
     index: int = Field(ge=0, le=9)
+
+
+class Words(BaseModel):
+    words: list[str] = Field(max_length=30)
 
 
 pipeline: Pipeline
@@ -190,11 +240,20 @@ async def lifespan(app):
     pipeline.stop()
 
 
-app = FastAPI(title="SignSpeak AI", lifespan=lifespan)
+app = FastAPI(title="SignSpeak AI", version="1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=WEB), name="static")
 
 
-@app.get("/")
+@app.middleware("http")
+async def revalidate_ui_files(request, call_next):
+    """Browsers must re-check the UI files each load (a cheap 304), so an update is never hidden by a stale cache."""
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.get("/", include_in_schema=False)
 def index():
     return FileResponse(WEB / "index.html")
 
@@ -223,6 +282,22 @@ async def events():
     return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
 
 
+@app.get("/api/state")
+def state():
+    return pipeline.state()
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok" if pipeline.status == "live" else "degraded", "camera": pipeline.status,
+            "model": pipeline.model["version"], "uptime_s": round(time.time() - pipeline.started, 1)}
+
+
+@app.get("/api/metrics")
+def metrics():
+    return pipeline.metrics()
+
+
 @app.get("/api/cameras")
 async def cameras():
     return await asyncio.to_thread(pipeline.scan)
@@ -237,7 +312,7 @@ def set_camera(choice: CameraChoice):
 @app.post("/api/settings")
 def set_settings(s: Settings):
     rec = pipeline.recognizer
-    for name in ("threshold", "hold", "pause"):
+    for name in ("threshold", "hold", "pause", "stride"):
         if getattr(s, name) is not None:
             setattr(rec, name, getattr(s, name))
     if s.mute is not None:
@@ -245,9 +320,33 @@ def set_settings(s: Settings):
     return pipeline.state()["settings"]
 
 
+@app.put("/api/words")
+def set_words(body: Words):
+    allowed = set(pipeline.labels) - {"nothing"}
+    unknown = [w for w in body.words if w not in allowed]
+    if unknown:
+        raise HTTPException(422, f"not in the vocabulary: {', '.join(unknown)}")
+    pipeline.recognizer.set_words(body.words)
+    return {"words": body.words}
+
+
+@app.post("/api/speak")
+def speak_now():
+    if not pipeline.recognizer.finish():
+        raise HTTPException(409, "no words to speak")
+    return {}
+
+
+@app.post("/api/repeat")
+def repeat():
+    if not pipeline.repeat():
+        raise HTTPException(409, "no sentence yet")
+    return {}
+
+
 @app.post("/api/clear")
 def clear():
-    pipeline.clear()
+    pipeline.recognizer.set_words([])
     return {}
 
 
@@ -258,5 +357,6 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s", datefmt="%H:%M:%S")
     config.update(camera=args.camera, backend=args.backend)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

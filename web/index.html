@@ -3,59 +3,122 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
   <title>SignSpeak AI</title>
   <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // Set the theme before first paint so the page never flashes the wrong one.
+    try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
 </head>
 <body>
-  <header>
-    <div class="brand">SignSpeak <span>AI</span></div>
-    <div class="status" id="status" data-state="connecting">
-      <span class="dot"></span><span id="status-text">Connecting</span><span class="fps" id="fps"></span>
+  <header class="appbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">S</span>
+      <div class="brand-text">
+        <span class="brand-name">SignSpeak AI</span>
+        <span class="brand-sub">ASL to speech, live</span>
+      </div>
+    </div>
+    <div class="appbar-right">
+      <div class="status" id="status" data-state="connecting" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span><span id="status-text">Connecting</span><span class="fps" id="fps"></span>
+      </div>
+      <button id="theme" type="button" class="btn ghost" aria-label="Toggle light and dark theme">Theme</button>
     </div>
   </header>
 
-  <main>
-    <section class="stage">
-      <div class="video-wrap"><img id="video" src="/video" alt="Camera feed"></div>
-      <div class="toolbar">
-        <label for="camera">Camera</label>
-        <select id="camera"></select>
-        <button id="rescan" type="button">Rescan</button>
-        <span class="hint" id="camera-msg"></span>
+  <main class="workspace">
+    <section class="stage" aria-label="Camera">
+      <div class="video-card">
+        <div class="video-toolbar">
+          <label class="field">
+            <span class="field-label">Camera</span>
+            <select id="camera"></select>
+          </label>
+          <button id="rescan" type="button" class="btn">Rescan</button>
+          <ul class="tracking" id="tracking" aria-label="Tracking" hidden>
+            <li data-part="body">Body</li><li data-part="left_hand">Left hand</li><li data-part="right_hand">Right hand</li>
+          </ul>
+        </div>
+
+        <div class="video-frame">
+          <img id="video" src="/video" alt="Live camera feed with hand and body landmarks">
+          <div class="caption" id="caption" hidden>
+            <div class="caption-row">
+              <span class="caption-sign" id="caption-sign"></span>
+              <span class="caption-conf" id="caption-conf"></span>
+            </div>
+            <div class="hold" aria-hidden="true"><div class="hold-fill" id="hold-fill"></div></div>
+          </div>
+          <div class="empty" id="notice" role="alert" hidden>
+            <div class="empty-body">
+              <p class="empty-title" id="notice-title">No camera picture</p>
+              <p class="empty-text" id="notice-text"></p>
+              <div class="empty-actions">
+                <button id="next-camera" type="button" class="btn primary">Try next camera</button>
+              </div>
+            </div>
+          </div>
+          <div class="banner" id="framing" role="status" hidden>
+            Move back until both shoulders are in frame. Signs are measured relative to them.
+          </div>
+        </div>
+
+        <dl class="video-stats">
+          <div><dt>Inference</dt><dd id="m-latency">-</dd></div>
+          <div><dt>Analysed</dt><dd id="m-stride">-</dd></div>
+          <div><dt>Model</dt><dd id="m-model">-</dd></div>
+          <div class="grow"><dt>Status</dt><dd id="warmup">-</dd></div>
+        </dl>
       </div>
     </section>
 
-    <aside>
-      <section class="card">
-        <h2>Detected sign</h2>
-        <div class="sign" id="sign">&ndash;</div>
-        <div class="confidence"><div class="bar" id="sign-bar"></div></div>
-        <div class="hint" id="sign-hint"></div>
+    <aside class="side">
+      <section class="card" aria-labelledby="h-transcript">
+        <header class="card-head">
+          <h2 id="h-transcript">Transcript</h2>
+          <button id="clear" type="button" class="btn link">Clear</button>
+        </header>
+        <div class="words" id="words" aria-live="polite" aria-describedby="words-help"></div>
+        <p class="sr-only" id="words-help">Drag words to reorder, or focus one and press Shift and an arrow key. Delete removes it.</p>
+        <div class="pause" aria-hidden="true"><div class="pause-fill" id="pause-fill"></div></div>
+        <div class="sentence" id="sentence" aria-live="polite"></div>
+        <div class="actions">
+          <button id="speak" type="button" class="btn primary">Speak now</button>
+          <button id="repeat" type="button" class="btn">Repeat last</button>
+        </div>
+        <ol class="history" id="history" aria-label="Earlier sentences"></ol>
       </section>
 
-      <section class="card">
-        <h2>Transcript <button id="clear" type="button" class="link">Clear</button></h2>
-        <div class="words" id="words"></div>
-        <div class="sentence" id="sentence"></div>
+      <section class="card" aria-labelledby="h-vocab">
+        <header class="card-head">
+          <h2 id="h-vocab">Vocabulary</h2>
+          <span class="muted small" id="vocab-hint"></span>
+        </header>
+        <div class="vocab" id="vocab"></div>
+        <p class="muted small vocab-note">Live probability per sign. Click a sign to add it by hand.</p>
       </section>
 
-      <section class="card">
-        <h2>Class probabilities</h2>
-        <div class="probs" id="probs"></div>
-      </section>
-
-      <section class="card">
-        <h2>Settings</h2>
+      <details class="card settings">
+        <summary class="card-head"><h2>Recognition settings</h2></summary>
         <div class="setting"><label for="threshold">Confidence threshold</label><output id="threshold-out"></output>
           <input type="range" id="threshold" min="0.5" max="1" step="0.01"></div>
-        <div class="setting"><label for="hold">Hold frames</label><output id="hold-out"></output>
+        <div class="setting"><label for="hold">Hold to accept (analysed frames)</label><output id="hold-out"></output>
           <input type="range" id="hold" min="1" max="15" step="1"></div>
-        <div class="setting"><label for="pause">Pause ends sentence (s)</label><output id="pause-out"></output>
+        <div class="setting"><label for="pause">Pause that ends a sentence (s)</label><output id="pause-out"></output>
           <input type="range" id="pause" min="0.5" max="10" step="0.5"></div>
+        <div class="setting"><label for="stride">Frames analysed</label><output id="stride-out"></output>
+          <input type="range" id="stride" min="1" max="3" step="1"></div>
         <label class="check"><input type="checkbox" id="mute"> Mute speech</label>
-      </section>
+      </details>
     </aside>
   </main>
+
+  <footer class="appfoot">
+    <p>Shortcuts: <kbd>S</kbd> speak now <kbd>C</kbd> clear <kbd>M</kbd> mute <kbd>N</kbd> next camera</p>
+    <p id="model-info"></p>
+  </footer>
   <script src="/static/app.js"></script>
 </body>
 </html>

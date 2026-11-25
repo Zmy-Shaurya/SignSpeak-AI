@@ -1,0 +1,12 @@
+# Keep the image small and never bake in secrets or raw data.
+.env
+.git
+.github
+.venv
+.claude
+.agents
+__pycache__
+data
+learning
+tests
+*.pptx

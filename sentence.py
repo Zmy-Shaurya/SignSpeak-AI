@@ -6,11 +6,9 @@ Self-check (no key or network needed): python sentence.py
 """
 import json
 import os
+import sys
 import urllib.request
 from pathlib import Path
-
-import comtypes
-import comtypes.client
 
 # Load KEY=value lines from the gitignored .env next to this file. Real environment variables win.
 _env = Path(__file__).with_name(".env")
@@ -65,8 +63,15 @@ def make_speaker():
 
     Call it on the thread that will speak: COM objects belong to the thread that created them.
     ponytail: Windows-only and talks to SAPI directly, because pyttsx3 hung on the second sentence
-    from a background thread. Use pyttsx3 or another TTS library if macOS/Linux support is needed.
+    from a background thread. Elsewhere (Linux CI, Docker) it returns a silent speaker: text still shows.
+    Use pyttsx3 or another TTS library if macOS/Linux speech is needed.
     """
+    if sys.platform != "win32":
+        print("Speech output needs Windows (SAPI); sentences are shown as text only.")
+        return lambda text: None
+    import comtypes  # Windows-only package, so imported here rather than at the top
+    import comtypes.client
+
     comtypes.CoInitialize()
     return comtypes.client.CreateObject("SAPI.SpVoice").Speak
 

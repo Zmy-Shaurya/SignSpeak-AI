@@ -3,18 +3,22 @@
 Real-time **American Sign Language (ASL)** recognition from an ordinary webcam. SignSpeak AI watches you sign, tracks your body and hands with MediaPipe, and classifies the sign with a small LSTM neural network, live on a laptop CPU.
 
 > Semester mini project. Goal: webcam → sign recognition → text → speech.
-> Status: recognition works end to end; sentence assembly, text-to-speech and a web UI are next (see [Roadmap](#roadmap)).
+> Status: the full pipeline works end to end: recognition, sentence assembly, speech and a web UI, with automated tests, CI and a Docker image (see [Roadmap](#roadmap)).
 
 ---
 
 ## Contents
 
 - [How it works](#how-it-works)
+- [System architecture](#system-architecture)
 - [Current vocabulary and results](#current-vocabulary-and-results)
 - [Requirements](#requirements)
 - [Installation](#installation)
+- [Quick start: the web app](#quick-start-the-web-app)
 - [Quick start: run the live demo](#quick-start-run-the-live-demo)
 - [Full pipeline: train your own model](#full-pipeline-train-your-own-model)
+- [Testing and CI](#testing-and-ci)
+- [Docker](#docker)
 - [Adding data from other people or datasets](#adding-data-from-other-people-or-datasets)
 - [Project structure](#project-structure)
 - [Design decisions](#design-decisions)
@@ -51,6 +55,42 @@ Real-time **American Sign Language (ASL)** recognition from an ordinary webcam. 
 - **Keypoints, not pixels.** The model never sees the image, only body and hand coordinates. That makes it fast, lighting-independent, and trainable on a few hundred clips.
 - **A sequence model.** Most signs are movements, not poses, so an LSTM reads the 30 frames in order.
 - **A `nothing` class.** The model is trained on idle movement *and* on 50 unrelated ASL signs labelled `nothing`, so it learns to stay quiet instead of forcing every gesture into a known word.
+
+## System architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser["Browser (web/: HTML, CSS, JS, no build step)"]
+        UI[Live video, captions,<br/>sentence builder, settings]
+    end
+
+    subgraph Server["server.py (FastAPI + Uvicorn)"]
+        API[REST API<br/>/api/words, /api/speak,<br/>/api/settings, /api/camera]
+        SSE[SSE /api/events<br/>MJPEG /video]
+        OPS["/api/health<br/>/api/metrics"]
+        subgraph Capture["capture thread"]
+            CAM[OpenCV camera] --> ENG
+            subgraph ENG["engine.py Recognizer"]
+                HOL[MediaPipe Holistic<br/>every Nth frame] --> KP[keypoints.py<br/>normalize + resample]
+                KP --> LSTM[PyTorch LSTM<br/>models/sign_model.pt]
+                LSTM --> DEC[hold, cooldown,<br/>pause logic]
+            end
+        end
+        subgraph Speech["speech thread"]
+            SEN[sentence.py] --> TTS[Windows SAPI voice]
+        end
+        DEC -- words --> SEN
+    end
+
+    GEM[(Gemini API<br/>optional)]
+    SEN <-. 3 s timeout,<br/>plain fallback .-> GEM
+    UI <-- state 10/s, video --> SSE
+    UI -- edits, settings --> API
+```
+
+- **Two threads, one process.** The capture thread reads the camera and runs recognition; the speech thread phrases and speaks sentences, so a slow network or voice never freezes the video.
+- **The browser only displays.** Video arrives as an MJPEG stream and live state as server-sent events (10 per second). Everything the user changes goes back over a small REST API, which validates every input.
+- **`engine.py` is the single source of recognition logic.** Both front ends use it: the web app (`server.py`) and the OpenCV window (`live_predict.py`).
 
 ## Current vocabulary and results
 
@@ -98,6 +138,41 @@ This should print `keypoints.py self-check passed`.
 
 > **Note:** `mediapipe` is pinned to `0.10.14` on purpose, because newer releases removed the `mp.solutions` API this project uses. MediaPipe installs `opencv-contrib-python` itself. Don't also install `opencv-python`, because the two conflict.
 
+## Quick start: the web app
+
+```bash
+python server.py
+```
+
+Open http://localhost:8000. Options: `--camera 1` (start on another camera), `--backend dshow` (if a camera won't open on Windows), `--port 8080`.
+
+- **Camera:** pick a camera from the list, or press **Try next camera** if the current one fails. The badges on the video show whether your body and each hand are being tracked. A warning appears if your shoulders leave the frame, because every sign is measured relative to them.
+- **Signing:** the detected sign appears as a caption on the video. The bar under it fills while the sign is held; when it's full the word is accepted.
+- **Sentence builder:** accepted words appear as chips. Drag them to reorder (or focus one and press Shift+Arrow), press × or Delete to remove one, and click any sign in the **Vocabulary** grid to add a word the model missed. Pause to finish the sentence, or press **Speak now**. **Repeat last** says the last sentence again.
+- **Settings:** confidence threshold, hold frames, pause length, and how often frames are analysed (every frame, or 1 in 2 or 3 to save CPU).
+- **Shortcuts:** `S` speak now, `C` clear words, `M` mute, `N` next camera.
+
+### API
+
+Interactive documentation is generated at http://localhost:8000/docs.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /video` | MJPEG stream of the annotated camera feed |
+| `GET /api/events` | Server-sent events: live state 10 times per second |
+| `GET /api/state` | The same state, once |
+| `GET /api/health` | Liveness and camera status (`ok` / `degraded`) |
+| `GET /api/metrics` | fps, inference latency (mean, p50, p95), counters, model version |
+| `GET /api/cameras` | Probe camera indices 0 to 4 |
+| `POST /api/camera` | Switch camera: `{"index": 1}` |
+| `POST /api/settings` | Any of `threshold`, `hold`, `pause`, `stride`, `mute` |
+| `PUT /api/words` | Replace the word list (reorder, delete, add); unknown signs are rejected |
+| `POST /api/speak` | Finish the sentence now |
+| `POST /api/repeat` | Speak the last sentence again |
+| `POST /api/clear` | Drop the current words |
+
+The model version shown in the UI and in `/api/metrics` is the first 12 characters of the checkpoint's SHA-256, so every retrain is identifiable.
+
 ## Quick start: run the live demo
 
 A trained model is included at `models/sign_model.pt`.
@@ -132,6 +207,7 @@ Speech uses Windows' built-in voice (SAPI), so the live demo currently needs Win
 | `--threshold` | `0.9` | Minimum confidence before a sign is shown. |
 | `--hold` | `5` | Frames in a row a sign must win before it's accepted. Raise it if signs fire too easily. |
 | `--pause` | `2.0` | Seconds of not signing that end a sentence. |
+| `--stride` | `2` | Analyse every Nth frame (1 = every frame). Higher saves CPU; `--hold` counts analysed frames. |
 | `--model` | `gemini-3.5-flash-lite` | Gemini model used to phrase sentences. |
 
 The prediction looks at the last 3 seconds as a whole, so a sign appears shortly after you finish it and stays for up to 3 seconds.
@@ -174,11 +250,51 @@ python train.py
 
 This prints the training/test accuracy every 10 epochs and a confusion matrix at the end, then saves `models/sign_model.pt`. 20% of each sign is held out for testing. It takes about 1–2 minutes on a laptop CPU.
 
+| Option | Meaning |
+|---|---|
+| `--cv` | 5-fold cross-validation instead: every clip is tested once, much steadier than one 20% split. No model is saved. About 12 minutes. |
+| `--weights balanced` | Weight each sign's loss by 1 / its clip count, so small classes matter as much as the large `nothing` class. |
+| `--boost where=1.5,me=1.5` | Extra loss weight for specific signs the model confuses. |
+| `--epochs 400` | Training length. |
+
+Every run (settings, accuracy, per-sign accuracy) is appended to `models/train_log.jsonl`, which is the experiment history.
+
 ### 4. Run it live
 
 ```bash
 python live_predict.py --camera 0
 ```
+
+## Testing and CI
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+The suite (`tests/`) runs in about 15 seconds and needs no camera:
+
+| File | Covers |
+|---|---|
+| `test_keypoints.py` | Normalization is position- and distance-invariant; missing parts stay zero; resampling |
+| `test_engine.py` | Hold-to-accept, cooldown, low confidence and `nothing` never accepted, pause ends the sentence, speak-now; plus MediaPipe and the shipped model end to end on blank frames |
+| `test_sentence.py` | Plain fallback, Gemini reply parsing (network mocked), key sent as a header, timeout fallback |
+| `test_train.py` | Model output shape, augmentation keeps missing hands at zero, class weights |
+| `test_server.py` | The real API against a camera that doesn't exist: health, metrics, input validation, word editing, speak and repeat |
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the self-checks and the tests on Windows and Linux for every push and pull request.
+
+## Docker
+
+```bash
+docker build -t signspeak .
+docker run -p 8000:8000 --device /dev/video0 -e GEMINI_API_KEY signspeak
+```
+
+- Webcam access needs a **Linux host** (`--device /dev/video0`). Docker Desktop on Windows and macOS can't pass a webcam into a container: there, run `python server.py` directly. Without a camera the container still serves the UI and API and reports a camera error.
+- Speech uses the Windows voice, so in the container sentences are shown as text only.
+- `.env`, raw videos and the virtual environment are excluded by `.dockerignore`; pass the Gemini key at run time with `-e`.
+- The image has a health check on `/api/health` and runs as a non-root user.
 
 ## Adding data from other people or datasets
 
@@ -201,17 +317,25 @@ SignSpeak-AI/
 ├── record_videos.py      1. record webcam clips      -> data/videos/<sign>/
 ├── extract_dataset.py    2. clips -> keypoints       -> data/keypoints/<sign>/
 ├── train.py              3. train the LSTM           -> models/sign_model.pt
-├── live_predict.py       4. live webcam recognition
+├── server.py             web app: FastAPI server, camera + speech threads, REST/SSE API
+├── web/                  web front end (index.html, style.css, app.js; no build step)
+├── engine.py             recognition engine shared by both front ends (+ self-check)
+├── live_predict.py       4. live recognition in an OpenCV window
 ├── live_vcam.py          live_predict + output to a virtual webcam (optional: OBS + pyvirtualcam)
-├── sentence.py          words -> sentence (Gemini or plain) and speech (+ self-check)
+├── sentence.py           words -> sentence (Gemini or plain) and speech (+ self-check)
 ├── keypoints.py          shared: keypoint layout, normalization, resampling (+ self-check)
+├── tests/                pytest suite (no camera needed)
 ├── models/
-│   └── sign_model.pt     trained model (weights + label names)
+│   ├── sign_model.pt     trained model (weights + label names)
+│   └── train_log.jsonl   every training / cross-validation run and its results
+├── Dockerfile            container image for the web app
+├── .github/workflows/    CI: tests on Windows and Linux
 ├── data/
 │   ├── videos/           raw clips (gitignored: faces, size)
 │   └── keypoints/        extracted (30, 258) arrays
 ├── learning/             Phase 1 exercises (webcam, hand landmarks, Holistic demo)
-└── requirements.txt
+├── requirements.txt
+└── requirements-dev.txt  + pytest, httpx for the tests
 ```
 
 The `learning/` scripts are standalone exercises. Run step 4 as a module from the project root: `python -m learning.step4_holistic_keypoints`.
@@ -228,6 +352,7 @@ The `learning/` scripts are standalone exercises. Run step 4 as a module from th
 | **Keep raw videos** | Extraction can be redone (for example to add face points) without re-recording. |
 | **PyTorch** instead of TensorFlow | TensorFlow conflicts with MediaPipe's protobuf version. |
 | **Data augmentation and dropout** | Random speed, rotation, scale and shift every epoch. It raised the mean test accuracy of the earlier 8-class model from 77% to 85% on the same splits. |
+| **No class weighting** | Tested with 5-fold CV on the same folds: unweighted 82.5%, class-balanced 81.3%, extra weight ×1.5 on where/me/yes/what 81.3%, ×2 79.0%. Weighting only moved errors between confused pairs (yes up, no down; where up, you down) and made `nothing` less reliable. Better accuracy on those pairs needs more clips of them, not different weights. Runs are in `models/train_log.jsonl`. |
 
 ## Troubleshooting
 
@@ -257,8 +382,11 @@ The `learning/` scripts are standalone exercises. Run step 4 as a module from th
 - [x] Debounce/cooldown so each sign is accepted once
 - [x] Sentence assembly (a pause ends the sentence), phrased by Gemini with an offline fallback
 - [x] Text-to-speech (Windows built-in voice, offline)
-- [ ] Web UI (Streamlit / Gradio) with live captions and confidence
-- [ ] Larger vocabulary and more signers
+- [x] Web app (FastAPI + plain web front end): live captions, confidence, camera switching, sentence editing
+- [x] Landmark-quality warnings and frame-skipping for lower CPU use
+- [x] Automated tests, CI on Windows and Linux, Docker image, health and metrics endpoints
+- [x] Class-weighted training and an experiment log
+- [ ] Larger vocabulary (your, who, need, bathroom, name) and more signers
 
 
 ## License
