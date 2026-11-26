@@ -162,7 +162,7 @@ kbd:first-child { margin-left: 4px; }
 .hold { height: 4px; margin-top: 10px; border-radius: 2px; background: rgb(255 255 255 / .18); overflow: hidden; }
 .hold-fill { height: 100%; width: 0; background: #5b93ff; transition: width .12s linear; }
 
-.empty {
+#notice {  /* id, not .empty: the sentence box also gets class "empty" (app.js) and must not become this overlay */
   position: absolute; inset: 0; display: grid; place-items: center; padding: 24px;
   background: radial-gradient(ellipse at center, #141821 0%, #07090c 75%); color: #e8ebf0; text-align: center;
 }
