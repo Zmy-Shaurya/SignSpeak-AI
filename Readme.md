@@ -5,6 +5,10 @@ Real-time **American Sign Language (ASL)** recognition from an ordinary webcam. 
 > Semester mini project. Goal: webcam → sign recognition → text → speech.
 > Status: the full pipeline works end to end: recognition, sentence assembly, speech and a web UI, with automated tests, CI and a Docker image (see [Roadmap](#roadmap)).
 
+[![SignSpeak AI launch video: sign ME WANT WATER, pause, and the app says "I want water." (36 s, click to play)](brand/launch-video.jpg)](brand/launch-video.mp4)
+
+*36-second launch video. Click the image to play it.*
+
 ---
 
 ## Contents
@@ -334,6 +338,7 @@ SignSpeak-AI/
 │   ├── videos/           raw clips (gitignored: faces, size)
 │   └── keypoints/        extracted (30, 258) arrays
 ├── learning/             Phase 1 exercises (webcam, hand landmarks, Holistic demo)
+├── brand/                logo, brand board, launch video
 ├── requirements.txt
 └── requirements-dev.txt  + pytest, httpx for the tests
 ```

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SignSpeak AI · Brand board</title>
+<style>
+@font-face { font-family: "Inter"; src: url("../web/vendor/inter-variable-latin.woff2") format("woff2"); font-weight: 100 900; }
+:root { --ink:#0b0d11; --panel:#12151b; --line:#232833; --muted:#7d8696; --text:#e8ebf0; --blue:#5b93ff; --blue-deep:#2563eb; --coral:#ff7a59; --paper:#f5f6f8; }
+* { box-sizing: border-box; margin: 0; }
+body { width: 1600px; height: 1060px; background: #07080b; color: var(--text); font: 14px/1.4 "Inter", system-ui, sans-serif; font-feature-settings: "cv11"; padding: 28px; }
+.board { display: grid; grid-template-columns: 1.15fr 1fr 1.15fr; grid-template-rows: repeat(3, 1fr); gap: 14px; height: 100%; }
+.p { position: relative; background: var(--panel); border-radius: 14px; overflow: hidden; padding: 26px; display: flex; flex-direction: column; }
+.lbl { position: absolute; left: 22px; bottom: 16px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.num { position: absolute; right: 22px; bottom: 16px; font-size: 10.5px; color: #4a5160; font-variant-numeric: tabular-nums; }
+.mark { color: var(--blue); }
+.center { align-items: center; justify-content: center; }
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+/* 1 */
+.cover { flex-direction: row; gap: 22px; }
+.word { font-size: 46px; font-weight: 650; letter-spacing: -.035em; }
+.word span { color: var(--muted); font-weight: 450; }
+/* 3 */
+.chrome { width: 100%; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--ink); }
+.bar { height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.bar i { width: 9px; height: 9px; border-radius: 50%; background: #2a303b; }
+.url { margin-left: 14px; flex: 1; height: 18px; border-radius: 5px; background: #171b22; font-size: 10.5px; color: var(--muted); display: flex; align-items: center; padding-left: 10px; }
+.appbar { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 650; font-size: 13px; }
+.appbar small { color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 4px; }
+.caption { padding: 18px 14px 20px; font-size: 25px; font-weight: 600; letter-spacing: -.02em; }
+.caption em { font-style: normal; color: var(--blue); }
+/* 4 */
+.tag { justify-content: flex-end; padding-bottom: 56px; }
+.tag h1 { font-size: 64px; font-weight: 650; letter-spacing: -.045em; line-height: 1; }
+.tag h1 em { font-style: normal; color: var(--blue); }
+/* 5 */
+.sw { display: grid; grid-template-columns: 1.6fr 1fr 1fr .7fr; gap: 8px; height: 150px; }
+.sw div { border-radius: 10px; padding: 12px; display: flex; flex-direction: column; justify-content: flex-end; font-size: 11px; }
+.sw b { font-weight: 600; font-size: 12px; }
+/* 6 */
+.type { flex-direction: row; align-items: flex-end; gap: 26px; padding-bottom: 52px; }
+.aa { font-size: 150px; font-weight: 650; letter-spacing: -.06em; line-height: .8; }
+.aa em { font-style: normal; color: var(--blue); }
+.spec { font-size: 12px; color: var(--muted); padding-bottom: 30px; line-height: 1.8; }
+.spec b { color: var(--text); font-weight: 600; }
+/* 7 */
+.icons { flex-direction: row; align-items: center; gap: 18px; justify-content: center; }
+.ic { display: grid; place-items: center; background: var(--blue-deep); color: #fff; }
+.ic.light { background: var(--paper); color: var(--blue-deep); }
+/* 9 */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); display: inline-flex; align-items: center; gap: 7px; font-size: 12px; }
+.chip.on { border-color: rgb(91 147 255 / .5); background: rgb(91 147 255 / .12); color: var(--blue); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 4px rgb(255 122 89 / .18); }
+.pct { color: var(--muted); font-variant-numeric: tabular-nums; }
+.term { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--ink); padding: 13px 14px; font-size: 12.5px; color: #b8c0cc; }
+.term .c { color: var(--blue); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <mask id="tips"><rect width="32" height="32" fill="#fff"/><g fill="#000">
+      <circle cx="3.75" cy="16.25" r="1"/><circle cx="9.75" cy="7.25" r="1"/><circle cx="15.75" cy="4.25" r="1"/>
+      <circle cx="21.75" cy="7.25" r="1"/><circle cx="27.75" cy="12.25" r="1"/></g></mask>
+    <symbol id="m" viewBox="0 0 32 32"><g mask="url(#tips)" fill="currentColor">
+      <rect x="1.5" y="14" width="4.5" height="11" rx="2.25"/><rect x="7.5" y="5" width="4.5" height="22" rx="2.25"/>
+      <rect x="13.5" y="2" width="4.5" height="28" rx="2.25"/><rect x="19.5" y="5" width="4.5" height="22" rx="2.25"/>
+      <rect x="25.5" y="10" width="4.5" height="14" rx="2.25"/></g></symbol>
+  </defs>
+</svg>
+
+<div class="board">
+  <!-- 1 cover -->
+  <section class="p cover center">
+    <svg class="mark" width="92" height="92"><use href="#m"/></svg>
+    <div class="word">SignSpeak <span>AI</span></div>
+    <span class="lbl">Identity</span><span class="num">01</span>
+  </section>
+
+  <!-- 2 construction -->
+  <section class="p center">
+    <svg width="250" height="250" viewBox="-2 -2 36 36" id="construct">
+      <g stroke="#1d222b" stroke-width=".08" id="grid"></g>
+      <g fill="none" stroke="#5b93ff" stroke-width=".14" stroke-dasharray=".5 .4" opacity=".9">
+        <rect x="1.5" y="14" width="4.5" height="11" rx="2.25"/><rect x="7.5" y="5" width="4.5" height="22" rx="2.25"/>
+        <rect x="13.5" y="2" width="4.5" height="28" rx="2.25"/><rect x="19.5" y="5" width="4.5" height="22" rx="2.25"/>
+        <rect x="25.5" y="10" width="4.5" height="14" rx="2.25"/></g>
+      <g id="skel" stroke="#7d8696" stroke-width=".12" fill="none"></g>
+      <g id="pts"></g>
+    </svg>
+    <span class="lbl">21 landmarks → 5 strokes</span><span class="num">02</span>
+  </section>
+
+  <!-- 3 digital -->
+  <section class="p center">
+    <div class="chrome">
+      <div class="bar"><i></i><i></i><i></i><span class="url mono">localhost:8000</span></div>
+      <div class="appbar"><svg class="mark" width="20" height="20"><use href="#m"/></svg>SignSpeak AI<small>ASL to speech, live</small></div>
+      <div class="caption">Hello, <em>how are you</em></div>
+    </div>
+    <span class="lbl">Product surface</span><span class="num">03</span>
+  </section>
+
+  <!-- 4 tagline -->
+  <section class="p tag">
+    <h1>Every sign,<br><em>heard.</em></h1>
+    <span class="lbl">Brand promise</span><span class="num">04</span>
+  </section>
+
+  <!-- 5 colour -->
+  <section class="p" style="justify-content:center">
+    <div class="sw">
+      <div style="background:var(--blue-deep);color:#fff"><b>Signal Blue</b>#2563EB</div>
+      <div style="background:var(--ink);border:1px solid var(--line)"><b>Ink</b><span class="pct">#0B0D11</span></div>
+      <div style="background:var(--paper);color:#111418"><b>Paper</b>#F5F6F8</div>
+      <div style="background:var(--coral);color:#2a0d05"><b>Landmark</b>#FF7A59</div>
+    </div>
+    <span class="lbl">Colour</span><span class="num">05</span>
+  </section>
+
+  <!-- 6 type -->
+  <section class="p type">
+    <div class="aa">A<em>a</em></div>
+    <div class="spec"><b>Inter</b> 650 / 400<br>Aa Bb Cc Dd Ee Ff Gg<br><span class="mono">0123456789 · 94%</span></div>
+    <span class="lbl">Typography</span><span class="num">06</span>
+  </section>
+
+  <!-- 7 icon scale -->
+  <section class="p icons">
+    <div class="ic" style="width:104px;height:104px;border-radius:24px"><svg width="64" height="64"><use href="#m"/></svg></div>
+    <div class="ic light" style="width:64px;height:64px;border-radius:15px"><svg width="40" height="40"><use href="#m"/></svg></div>
+    <div class="ic" style="width:40px;height:40px;border-radius:10px"><svg width="24" height="24"><use href="#m"/></svg></div>
+    <div class="ic" style="width:24px;height:24px;border-radius:6px"><svg width="16" height="16"><use href="#m"/></svg></div>
+    <svg class="mark" width="16" height="16"><use href="#m"/></svg>
+    <span class="lbl">Icon scale</span><span class="num">07</span>
+  </section>
+
+  <!-- 8 image direction -->
+  <section class="p center" style="padding:0">
+    <svg id="halftone" width="100%" height="100%" viewBox="0 0 420 300" preserveAspectRatio="xMidYMid slice"></svg>
+    <span class="lbl" style="color:#c9d2e0">Keypoints, not pixels</span><span class="num">08</span>
+  </section>
+
+  <!-- 9 system -->
+  <section class="p" style="justify-content:center">
+    <div class="chips">
+      <span class="chip on"><span class="dot"></span>Listening</span>
+      <span class="chip">hello <span class="pct">94%</span></span>
+      <span class="chip">thank you <span class="pct">88%</span></span>
+    </div>
+    <div class="term mono"><span class="c">$</span> python server.py<br><span style="color:var(--muted)">→ SignSpeak AI on http://localhost:8000</span></div>
+    <span class="lbl">System detail</span><span class="num">09</span>
+  </section>
+</div>
+
+<script>
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.appendChild(e); return e; };
+
+// 2: grid + MediaPipe-style hand skeleton laid over the mark
+const g = document.getElementById("grid");
+for (let i = 0; i <= 32; i += 2) { el("line", {x1:i,y1:0,x2:i,y2:32}, g); el("line", {x1:0,y1:i,x2:32,y2:i}, g); }
+const P = [[16,30.5],[10,27],[6,23],[4.5,19.5],[3.75,16.25],
+  [9.75,20],[9.75,14],[9.75,10],[9.75,7.25], [15.75,20],[15.75,13],[15.75,8],[15.75,4.25],
+  [21.75,20],[21.75,14],[21.75,10],[21.75,7.25], [27.75,21],[27.75,17],[27.75,14.5],[27.75,12.25]];
+const E = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const sk = document.getElementById("skel"), pts = document.getElementById("pts");
+E.forEach(([a,b]) => el("line", {x1:P[a][0],y1:P[a][1],x2:P[b][0],y2:P[b][1]}, sk));
+P.forEach(([x,y], i) => el("circle", {cx:x, cy:y, r: [4,8,12,16,20].includes(i) ? .55 : .38, fill: [4,8,12,16,20].includes(i) ? "#ff7a59" : "#c9d2e0"}, pts));
+
+// 8: halftone dot field; dots swell inside the mark's five strokes
+const H = document.getElementById("halftone");
+const bars = [[1.5,14,11],[7.5,5,22],[13.5,2,28],[19.5,5,22],[25.5,10,14]];
+const s = 7.2, ox = 210 - 16*s, oy = 150 - 16*s;
+const dist = (x, y) => Math.min(...bars.map(([bx,by,h]) => {
+  const cx = bx + 2.25, cy = Math.max(by + 2.25, Math.min(by + h - 2.25, y));
+  return Math.hypot(x - cx, y - cy) - 2.25;
+}));
+for (let y = 4; y < 300; y += 8) for (let x = 4 + ((y/8)%2)*4; x < 420; x += 8) {
+  const d = dist((x - ox)/s, (y - oy)/s);
+  const r = d < 0 ? 3.1 : Math.max(.5, 2.6 - d*.55);
+  el("circle", {cx:x, cy:y, r, fill: d < 0 ? "#5b93ff" : "#2a3140"}, H);
+}
+[[3.75,16.25],[9.75,7.25],[15.75,4.25],[21.75,7.25],[27.75,12.25]].forEach(([x,y]) =>
+  el("circle", {cx: ox + x*s, cy: oy + y*s, r: 4.5, fill: "#ff7a59"}, H));
+</script>
+</body>
+</html>

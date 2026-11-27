@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- SignSpeak AI app icon: the brand/logo.svg mark, white on a Signal Blue tile. -->
+  <rect width="32" height="32" rx="7" fill="#2563eb"/>
+  <g transform="translate(5 5) scale(.6875)" fill="#fff">
+    <rect x="1.5" y="14" width="4.5" height="11" rx="2.25"/><rect x="7.5" y="5" width="4.5" height="22" rx="2.25"/>
+    <rect x="13.5" y="2" width="4.5" height="28" rx="2.25"/><rect x="19.5" y="5" width="4.5" height="22" rx="2.25"/>
+    <rect x="25.5" y="10" width="4.5" height="14" rx="2.25"/>
+  </g>
+</svg>

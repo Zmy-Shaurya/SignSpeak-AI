@@ -12,3 +12,5 @@ data/keypoints/*/aslc_*
 skills-lock.json
 # local secrets (GEMINI_API_KEY)
 .env
+# launch-video build folder (frames, render tooling); the finished video lives in brand/
+brag-output/
